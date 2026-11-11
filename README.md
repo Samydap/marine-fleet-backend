@@ -3,6 +3,9 @@
 API del Sistema de Gestión de Recompensas y Captura de Criminales de la Marina (Caso 13).
 NestJS + TypeScript + TypeORM + MySQL, con Clean Architecture por módulo.
 
+> **¿Solo quieres ejecutar el proyecto?** Sigue la [guía de ejecución](docs/EJECUCION.md): tiene
+> el paso a paso completo, desde la base de datos hasta abrir la página en el navegador.
+
 > La arquitectura completa, la matriz de los 6 desarrolladores y las políticas de Git están
 > en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md), que es el mismo documento que está en el
 > repo del frontend: si lo cambias, actualiza las dos copias. Las decisiones puntuales con su
