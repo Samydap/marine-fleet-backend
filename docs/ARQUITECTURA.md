@@ -1159,7 +1159,7 @@ Los dos proyectos son ya **repositorios git independientes**, hermanos en el dis
 ```
 6 Semestre/
 ├── marine-fleet-backend/     repo git propio · ramas: main, develop
-├── marine-fleet-frontend/    repo git propio · ramas: main, develop, archive/scaffold-angular
+├── marine-fleet-frontend/    repo git propio · ramas: main, develop
 └── Caso_13_IngSoft/          la v1 que funciona hoy (React + Express) y el esquema SQL
 ```
 
@@ -1168,9 +1168,9 @@ Cada repositorio tiene su propio `package.json`, `tsconfig`, ESLint, Prettier, `
 este documento. `Caso_13_IngSoft/` **se deja intacto**: es el sistema que funciona y la fuente
 del esquema SQL. Se retira cuando el Sprint 1 cierre.
 
-La rama `archive/scaffold-angular` del frontend conserva el primer scaffolding, que se hizo en
-Angular antes de decidir quedarse en React. No se borró para no destruir trabajo, pero **no se
-mergea a nada**: está ahí solo como registro.
+El frontend tuvo un primer scaffolding en Angular, antes de decidir quedarse en React. Se
+descartó por completo y no quedó rastro en el repositorio: si alguien lo busca en el historial,
+no está. La decisión y su motivo están en la sección 1.2.
 
 **Instalación (cada dev, una vez):**
 
