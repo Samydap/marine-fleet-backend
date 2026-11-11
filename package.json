@@ -1,0 +1,118 @@
+{
+  "name": "marine-fleet-backend",
+  "version": "0.1.0",
+  "description": "Sistema de Gestion de Recompensas y Captura de Criminales de la Marina - API",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node dist/main",
+    "build": "nest build",
+    "lint": "eslint \"{src,test}/**/*.ts\" --max-warnings 0",
+    "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
+    "format": "prettier --write \"{src,test}/**/*.ts\" --no-error-on-unmatched-pattern",
+    "format:check": "prettier --check \"{src,test}/**/*.ts\" --no-error-on-unmatched-pattern",
+    "test": "jest --passWithNoTests",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests",
+    "typeorm": "typeorm-ts-node-commonjs -d src/shared/infrastructure/database/data-source.ts",
+    "migration:generate": "npm run typeorm -- migration:generate src/shared/infrastructure/database/migrations/%npm_config_name%",
+    "migration:create": "typeorm-ts-node-commonjs migration:create src/shared/infrastructure/database/migrations/%npm_config_name%",
+    "migration:run": "npm run typeorm -- migration:run",
+    "migration:revert": "npm run typeorm -- migration:revert",
+    "seed": "ts-node -r tsconfig-paths/register src/shared/infrastructure/database/seeds/one-piece.seed.ts",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/event-emitter": "^3.0.0",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/swagger": "^11.0.3",
+    "@nestjs/typeorm": "^11.0.0",
+    "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "compression": "^1.7.5",
+    "helmet": "^8.0.0",
+    "joi": "^17.13.3",
+    "mysql2": "^3.12.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "pdfkit": "^0.16.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "typeorm": "^0.3.20",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@nestjs/testing": "^11.0.1",
+    "@types/bcrypt": "^5.0.2",
+    "@types/compression": "^1.7.5",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.7",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/pdfkit": "^0.13.9",
+    "@types/supertest": "^6.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.20.0",
+    "@typescript-eslint/parser": "^8.20.0",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-prettier": "^5.2.3",
+    "husky": "^9.1.7",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.4.1",
+    "prettier": "^3.4.2",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "ts-loader": "^9.5.2",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.7.3"
+  },
+  "lint-staged": {
+    "*.{ts,json,md}": [
+      "prettier --write"
+    ],
+    "*.ts": [
+      "eslint --fix --max-warnings 0"
+    ]
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": "src",
+    "testRegex": ".*\\.spec\\.ts$",
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    },
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
+    "coverageDirectory": "../coverage",
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "^@shared/(.*)$": "<rootDir>/shared/$1",
+      "^@common/(.*)$": "<rootDir>/common/$1",
+      "^@config/(.*)$": "<rootDir>/config/$1",
+      "^@modules/(.*)$": "<rootDir>/modules/$1"
+    }
+  }
+}

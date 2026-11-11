@@ -1,0 +1,15 @@
+import { Global, Module } from '@nestjs/common';
+import { AppLogger } from './infrastructure/logging/logger.service';
+import { LocalStorageAdapter } from './infrastructure/storage/local-storage.adapter';
+import { STORAGE_PORT } from './infrastructure/storage/storage.port';
+
+/**
+ * Infraestructura transversal disponible para todos los modulos sin que cada
+ * uno tenga que importarla: evita diez cambios cuando se sustituye un adaptador.
+ */
+@Global()
+@Module({
+  providers: [AppLogger, { provide: STORAGE_PORT, useClass: LocalStorageAdapter }],
+  exports: [AppLogger, STORAGE_PORT],
+})
+export class SharedModule {}

@@ -1,0 +1,25 @@
+# Cada ruta tiene un dueño: GitHub asigna el reviewer automaticamente.
+# Reemplaza @dev1..@dev6 por los usuarios reales de GitHub del equipo.
+
+# Zona comun: pasa siempre por el Lead Tecnico.
+/src/config/               @dev1
+/src/common/               @dev1
+/src/shared/               @dev1
+/src/app.module.ts         @dev1
+/src/main.ts               @dev1
+/package.json              @dev1
+/package-lock.json         @dev1
+/.github/                  @dev1
+/docs/                     @dev1
+
+# Modulos con dueño unico.
+/src/modules/auth/         @dev1
+/src/modules/usuarios/     @dev1
+/src/modules/criminales/   @dev2
+/src/modules/recompensas/  @dev3
+/src/modules/amenaza/      @dev3
+/src/modules/carteles/     @dev4
+/src/modules/inteligencia/ @dev5
+/src/modules/operativos/   @dev6
+/src/modules/incidentes/   @dev6
+/src/modules/catalogos/    @dev6
