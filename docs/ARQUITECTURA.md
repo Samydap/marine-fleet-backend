@@ -13,11 +13,15 @@ Documento de arquitectura y convenciones de equipo · Stack: TypeScript fullstac
 | ------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------- |
 | Repositorios        | 1 monorepo informal (`backend/`, `frontend/`, `database/`)         | 2 repos independientes: `marine-fleet-backend`, `marine-fleet-frontend` |
 | Backend             | Express + `mysql2` crudo, **todo en `src/server.ts` (291 líneas)** | NestJS modular + Clean Architecture por módulo                          |
-| Frontend            | React 18 + Vite, **todo en `src/App.tsx` (395 líneas)**            | Angular con arquitectura feature-based y lazy loading                   |
+| Frontend            | React 18 + Vite, **todo en `src/App.tsx` (395 líneas)**            | React + Vite con arquitectura feature-based y un chunk por página       |
 | Cobertura funcional | Solo RF-3 parcial (CRUD de avistamientos)                          | RF-1 a RF-7                                                             |
 | Autenticación       | Inexistente                                                        | JWT + RBAC + MFA opcional (el esquema ya lo prevé)                      |
 
-> **Advertencia de alcance real:** el frontend actual es React. Angular no es una migración incremental, es una reescritura de la capa de UI. Lo que sí se conserva es el esquema SQL (`database/schema.sql`), que está bien modelado y es la base del dominio. La lógica de validación de `server.ts` (`parseFechaHora`, validaciones de entrada) se traduce a DTOs con `class-validator`; no se tira.
+> **Qué se conserva de la v1 y qué no.** El framework del frontend **no cambia**: la v1 es React y la v2 sigue en React, así que el equipo se queda en lo que ya conoce y el módulo que funcionaba se porta en lugar de reescribirse. Lo que cambia es dónde vive cada cosa: el `App.tsx` de 395 líneas se reparte entre `features/inteligencia/` (la pantalla), `core/http/` (las llamadas) y `shared/utils/fecha.ts` (las funciones de fecha, que ahora además tienen pruebas).
+>
+> También se conserva el esquema SQL (`database/schema.sql`), que está bien modelado y es la base del dominio, y el CSS de la v1, que es el diseño que el equipo ya había hecho. La lógica de validación de `server.ts` (`parseFechaHora`, validaciones de entrada) se traduce a DTOs con `class-validator` en el backend; no se tira.
+>
+> **Lo que sí se pierde temporalmente:** el CRUD de avistamientos de la v1 apuntaba a la API vieja (`/api/avistamientos`). Al portarlo al contrato nuevo (`/api/v1/avistamientos`), la pantalla compila y se renderiza pero no tiene backend hasta que Dev 5 implemente el módulo `inteligencia` en el Sprint 1. Es una decisión consciente, no un olvido: el alternativo era arrastrar el contrato viejo a la v2.
 
 > **Hueco detectado en el esquema:** `schema.sql` **no tiene tablas para RF-4 (coordinación de operativos) ni para RF-6 (historial de incidentes y enfrentamientos)**. Solo existe `criminales_historial`, que es un log de cambios de atributos generado por trigger, no un historial de enfrentamientos. Esas tablas (`operativos`, `operativo_bases`, `incidentes`, `incidente_participantes`) deben crearse como migración al inicio del Sprint 1, antes de que los devs de esos módulos puedan avanzar. Está contemplado en la matriz de asignación.
 
@@ -55,27 +59,23 @@ Documentar esta asimetría por escrito evita la discusión semanal de "¿por qu�
 
 **ORM: TypeORM, no Prisma.** Prisma tiene mejor DX, pero concentra todo el modelo en un único `schema.prisma`: con 6 devs tocando entidades en paralelo, ese archivo se convierte en el nuevo `server.ts`. TypeORM distribuye **una entidad por archivo dentro del módulo de su dueño** y genera **una migración por archivo con timestamp**: dos propiedades que eliminan conflictos estructurales. Configuración obligatoria: `synchronize: false` siempre. El esquema vive en migraciones versionadas, nunca en autogeneración.
 
-### 1.2 Frontend — Angular feature-based con standalone components y lazy loading
+### 1.2 Frontend — React feature-based con rutas y chunks por feature
 
-**Decisión:** tres zonas (`core/`, `shared/`, `features/`) con una regla de dependencia unidireccional, y **un archivo de rutas propio por feature** cargado con `loadChildren`.
+**Decisión:** tres zonas (`core/`, `shared/`, `features/`) con una regla de dependencia unidireccional, y **un archivo de rutas propio por feature** cuyas páginas se cargan con `React.lazy`.
 
-```
-features/X  →  puede importar de shared/ y core/
-shared/     →  puede importar de core/            (nunca de features/)
-core/       →  no importa de nadie
-features/X  →  NUNCA importa de features/Y
-```
+> **Nota de historia:** la primera versión de este documento diseñó esta capa sobre Angular, porque así se pidió. Al revisar el costo real se cambió a React, que es el framework de la v1 del sistema: mantiene al equipo en lo que ya conoce y permite reutilizar el módulo de avistamientos que ya funcionaba. Las decisiones de arquitectura de esta sección no cambiaron con el framework — no eran angular-específicas—, solo su traducción técnica.
 
-**Cómo se aísla cada módulo en la práctica:**
+**Cómo se aísla cada feature en la práctica:**
 
-1. **Un `*.routes.ts` por feature.** Cada feature declara sus rutas hijas y `app.routes.ts` solo las referencia con una línea `loadChildren`. Un dev que agrega tres pantallas toca **su** archivo de rutas; el archivo raíz cambia una vez por feature en todo el proyecto, no una vez por pantalla. Esto es lo que elimina los conflictos en Angular.
-2. **Standalone components.** Sin `NgModule` por feature no existe el `declarations[]` compartido, el otro punto histórico de colisión. Cada componente declara sus propios `imports`.
-3. **Lazy loading real.** Cada feature es un chunk independiente: el bundle de Carteles no se descarga si el usuario entra a Avistamientos, y un error de compilación en una feature no impide trabajar en las demás.
-4. **`data-access/` por feature.** El servicio HTTP de un feature vive dentro del feature. Nada de un `api.service.ts` global con 40 métodos: eso acopla a todos con todos y es conflicto garantizado.
-5. **Comunicación entre features solo por contrato.** Si Operativos necesita mostrar criminales, consume el endpoint del backend o un servicio de `core/`; nunca importa `features/criminales/...`. Se verifica con una regla de ESLint (`no-restricted-imports`), no con confianza.
-6. **Estado:** Angular Signals más un servicio con estado por feature. NgRx es desproporcionado para este alcance y añade cuatro archivos compartidos por acción (actions/reducer/effects/selectors), todos focos de merge.
+1. **Un `*.routes.tsx` por feature.** Cada feature exporta su propio arreglo de `RouteObject` y `app/routes.tsx` solo lo referencia con una línea. Un dev que agrega tres pantallas toca **su** archivo de rutas; el archivo raíz cambia una vez por feature en todo el proyecto, no una vez por pantalla. Esto es lo que elimina los conflictos.
+2. **`React.lazy` por página.** Cada página es su propio chunk: el bundle de Carteles no se descarga si el usuario entra a Avistamientos. Verificado en el build — hay un chunk por página, no uno monolítico.
+3. **`data-access/` por feature.** El módulo HTTP de una feature vive dentro de la feature. Nada de un `api.ts` global con 40 métodos: eso acopla a todos con todos y es conflicto garantizado.
+4. **Comunicación entre features solo por contrato.** Si Operativos necesita mostrar criminales, consume el endpoint del backend o un servicio de `core/`; nunca importa `features/criminales/...`. Lo verifica ESLint, no la confianza, y está comprobado con pruebas negativas.
+5. **Estado:** un store por feature con **Zustand** (3 kB, un archivo por store). Es el equivalente directo del store por feature que tendría Angular con signals. Se descartó Redux/NgRx por el mismo motivo en ambos frameworks: añade cuatro archivos compartidos por acción, todos focos de merge. Se descartó TanStack Query por ahora para no sumar conceptos (queryKeys, invalidación) a seis juniors en el primer sprint; **cuándo añadirlo:** si aparece necesidad real de caché compartida entre pantallas o refetch en background.
 
-**Guards y RBAC en frontend:** `authGuard` (sesión) y `roleGuard` (permiso) viven en `core/guards/` y se aplican como `canActivate`/`canMatch` en el `*.routes.ts` de cada feature. El frontend oculta, el backend decide: todo guard de UI tiene su contraparte obligatoria en el `RolesGuard` del backend.
+**Guards y RBAC en frontend:** `RequireAuth` (sesión) y `RequirePermiso` (permiso) viven en `core/guards/` y se usan como `element` de la ruta padre en el `*.routes.tsx` de cada feature. Al envolver la ruta, el chunk del hijo **no se descarga** si no hay permiso: es la propiedad útil que tenía `canMatch` en Angular y aquí se conserva. El frontend oculta, el backend decide: todo guard de UI tiene su contraparte obligatoria en el `RolesGuard` del backend.
+
+**Los interceptores HTTP se construyen, no vienen dados.** React no trae el equivalente de `HttpInterceptorFn`, así que `core/http/` define una cadena componible sobre `fetch` (`Peticion`, `Siguiente`, `Interceptor` y una función `componer`). Son cuatro archivos —URL base, token, indicador de carga y mapeo de errores— compuestos en `api-client.ts`. Se mantiene la propiedad que importaba: cada responsabilidad transversal en su propio archivo, y ninguna feature reimplementando headers, errores ni spinner.
 
 ---
 
@@ -356,180 +356,135 @@ marine-fleet-backend/
 ```
 marine-fleet-frontend/
 ├── .github/
-│   └── workflows/
-│       └── ci.yml
+│   ├── workflows/
+│   │   └── ci.yml
+│   ├── CODEOWNERS
+│   └── pull_request_template.md
+├── docs/
+│   └── ARQUITECTURA.md                   # copia compartida con el backend
 ├── public/
-│   └── favicon.ico
 ├── src/
-│   ├── main.ts
-│   ├── index.html
-│   ├── styles.scss                       # solo tokens globales y reset
+│   ├── main.tsx                          # monta el RouterProvider
+│   ├── styles.css                        # tokens + diseño heredado de la v1
+│   ├── vite-env.d.ts
+│   ├── test-setup.ts                     # jest-dom, cleanup y polyfill de Storage
 │   │
 │   ├── app/
-│   │   ├── app.component.ts              # shell: header + sidebar + <router-outlet>
-│   │   ├── app.config.ts                 # providers raíz: HttpClient + interceptores
-│   │   ├── app.routes.ts                 # SOLO loadChildren, 1 línea por feature
-│   │   │
-│   │   ├── core/                         # DUEÑO: Dev 1 — PR con 2 reviewers
-│   │   │   ├── session/                  # NO se llama auth/: ver nota al final de 4.6
-│   │   │   │   ├── auth.service.ts       # sesión, signals de usuario y permisos
-│   │   │   │   ├── token.store.ts
-│   │   │   │   └── permiso.enum.ts       # espejo de los permisos del backend
-│   │   │   ├── guards/
-│   │   │   │   ├── auth.guard.ts         # canActivate: hay sesión
-│   │   │   │   ├── role.guard.ts         # canMatch: roleGuard(['ALMIRANTE'])
-│   │   │   │   └── unsaved-changes.guard.ts
-│   │   │   ├── interceptors/
-│   │   │   │   ├── auth.interceptor.ts   # inyecta Bearer token
-│   │   │   │   ├── error.interceptor.ts  # 401 -> logout, 403 -> aviso, 5xx -> toast
-│   │   │   │   ├── loading.interceptor.ts
-│   │   │   │   └── api-url.interceptor.ts# prefija environment.apiUrl
-│   │   │   ├── http/
-│   │   │   │   └── api-client.service.ts # wrapper fino: GET/POST tipados + paginación
-│   │   │   ├── models/
-│   │   │   │   ├── api-response.model.ts
-│   │   │   │   ├── page-result.model.ts
-│   │   │   │   └── rol.model.ts
-│   │   │   ├── layout/
-│   │   │   │   ├── main-layout/
-│   │   │   │   ├── header/
-│   │   │   │   └── sidebar/              # menú filtrado por permisos
-│   │   │   └── services/
-│   │   │       ├── notification.service.ts
-│   │   │       └── breadcrumb.service.ts
-│   │   │
-│   │   ├── shared/                       # DUEÑO: Dev 4 — componentes tontos, sin lógica de negocio
-│   │   │   ├── ui/
-│   │   │   │   ├── data-table/
-│   │   │   │   ├── confirm-dialog/
-│   │   │   │   ├── badge-amenaza/        # BAJO/MEDIO/ALTO con color
-│   │   │   │   ├── bounty-display/       # formato de berries
-│   │   │   │   ├── empty-state/
-│   │   │   │   ├── page-header/
-│   │   │   │   └── file-upload/
-│   │   │   ├── directives/
-│   │   │   │   └── has-permission.directive.ts   # *appHasPermission="'GESTION_CRIMINALES'"
-│   │   │   ├── pipes/
-│   │   │   │   ├── berries.pipe.ts
-│   │   │   │   ├── nivel-amenaza.pipe.ts
-│   │   │   │   └── fecha-marina.pipe.ts
-│   │   │   ├── validators/
-│   │   │   │   └── form.validators.ts
-│   │   │   └── utils/
-│   │   │       └── form-error.util.ts
-│   │   │
-│   │   └── features/                     # ZONA DE TRABAJO PARALELO
-│   │       ├── auth/                     # DUEÑO: Dev 1
-│   │       │   ├── auth.routes.ts
-│   │       │   ├── pages/
-│   │       │   │   ├── login-page/
-│   │       │   │   └── mfa-page/
-│   │       │   └── data-access/
-│   │       │       └── auth-api.service.ts
-│   │       │
-│   │       ├── criminales/               # RF-1 · DUEÑO: Dev 2
-│   │       │   ├── criminales.routes.ts  # ÚNICO archivo de rutas que toca Dev 2
-│   │       │   ├── pages/
-│   │       │   │   ├── criminal-list-page/
-│   │       │   │   ├── criminal-detail-page/
-│   │       │   │   └── criminal-form-page/
-│   │       │   ├── components/
-│   │       │   │   ├── criminal-card/
-│   │       │   │   ├── criminal-filters/
-│   │       │   │   ├── organizacion-selector/
-│   │       │   │   └── antecedentes-table/
-│   │       │   ├── data-access/
-│   │       │   │   ├── criminales-api.service.ts
-│   │       │   │   └── criminales.store.ts     # estado con signals
-│   │       │   └── models/
-│   │       │       ├── criminal.model.ts
-│   │       │       └── organizacion.model.ts
-│   │       │
-│   │       ├── recompensas/              # RF-1/RF-5 · DUEÑO: Dev 3
-│   │       │   ├── recompensas.routes.ts
-│   │       │   ├── pages/ (list, solicitud, bandeja-validacion)
-│   │       │   ├── components/ (monto-input, estado-chip)
-│   │       │   ├── data-access/
-│   │       │   └── models/
-│   │       │
-│   │       ├── amenaza/                  # RF-5 · DUEÑO: Dev 3
-│   │       │   ├── amenaza.routes.ts
-│   │       │   ├── pages/ (dashboard-amenaza, criterios-config)
-│   │       │   ├── components/ (matriz-riesgo, distribucion-chart)
-│   │       │   ├── data-access/
-│   │       │   └── models/
-│   │       │
-│   │       ├── carteles/                 # RF-2 · DUEÑO: Dev 4
-│   │       │   ├── carteles.routes.ts
-│   │       │   ├── pages/ (cartel-gallery, cartel-preview)
-│   │       │   ├── components/ (wanted-poster-preview, version-history)
-│   │       │   ├── data-access/
-│   │       │   └── models/
-│   │       │
-│   │       ├── inteligencia/             # RF-3 · DUEÑO: Dev 5
-│   │       │   ├── inteligencia.routes.ts
-│   │       │   ├── pages/ (avistamientos-list, avistamiento-form, reportes-inbox)
-│   │       │   ├── components/ (mapa-avistamientos, timeline-avistamientos)
-│   │       │   ├── data-access/
-│   │       │   └── models/
-│   │       │
-│   │       ├── operativos/               # RF-4 · DUEÑO: Dev 6
-│   │       │   ├── operativos.routes.ts
-│   │       │   ├── pages/ (operativos-board, operativo-detail, operativo-form)
-│   │       │   ├── components/ (bases-selector, estado-stepper)
-│   │       │   ├── data-access/
-│   │       │   └── models/
-│   │       │
-│   │       ├── incidentes/               # RF-6 · DUEÑO: Dev 6
-│   │       │   ├── incidentes.routes.ts
-│   │       │   ├── pages/ (historial-page, incidente-form)
-│   │       │   ├── components/ (timeline-incidentes, resultado-badge)
-│   │       │   ├── data-access/
-│   │       │   └── models/
-│   │       │
-│   │       └── admin/                    # RF-7 · DUEÑO: Dev 1
-│   │           ├── admin.routes.ts
-│   │           ├── pages/ (usuarios-list, usuario-form, roles-matrix, bitacora)
-│   │           ├── data-access/
-│   │           └── models/
+│   │   └── routes.tsx                    # SOLO una línea por feature
 │   │
-│   ├── assets/
-│   │   ├── images/
-│   │   │   ├── logo-marina.svg
-│   │   │   └── poster-frame.png          # marco del wanted poster
-│   │   ├── fonts/
-│   │   ├── icons/
-│   │   └── i18n/
-│   │       └── es.json
+│   ├── core/                             # DUEÑO: Dev 1 — PR con 2 reviewers
+│   │   ├── session/                      # NO se llama auth/: ver nota en 4.6
+│   │   │   ├── permiso.enum.ts           # espejo del RBAC del backend
+│   │   │   ├── session.store.ts          # estado de sesión (Zustand)
+│   │   │   ├── session.service.ts        # login, restaurar, logout
+│   │   │   └── token.store.ts            # único módulo que toca localStorage
+│   │   ├── guards/
+│   │   │   ├── RequireAuth.tsx           # exige sesión; rehidrata en F5
+│   │   │   └── RequirePermiso.tsx        # exige permiso; no baja el chunk
+│   │   ├── http/
+│   │   │   ├── types.ts                  # Peticion, Siguiente, Interceptor, componer
+│   │   │   ├── api-url.interceptor.ts    # prefija /api/v1
+│   │   │   ├── auth.interceptor.ts       # inyecta el Bearer token
+│   │   │   ├── loading.interceptor.ts    # cuenta peticiones en vuelo
+│   │   │   ├── error.interceptor.ts      # 401 -> logout, 403/409 -> aviso
+│   │   │   └── api-client.ts             # compone la cadena y desenvuelve el sobre
+│   │   ├── models/
+│   │   │   ├── api-response.ts           # ApiResponse, PageMeta, ApiError
+│   │   │   └── page-result.ts
+│   │   ├── layout/
+│   │   │   ├── MainLayout.tsx            # shell: header + sidebar + <Outlet />
+│   │   │   ├── Header.tsx
+│   │   │   └── Sidebar.tsx               # menú filtrado por permisos
+│   │   └── services/
+│   │       ├── loading.store.ts
+│   │       └── notification.store.ts
 │   │
-│   └── environments/
-│       ├── environment.ts
-│       └── environment.development.ts
-├── .eslintrc.json
+│   ├── shared/                           # DUEÑO: Dev 4 — tontos, sin negocio
+│   │   ├── ui/
+│   │   │   ├── BadgeAmenaza.tsx          # BAJO/MEDIO/ALTO con color
+│   │   │   ├── PageHeader.tsx
+│   │   │   ├── EmptyState.tsx
+│   │   │   ├── Cargando.tsx
+│   │   │   └── conSuspense.tsx           # envoltorio de las rutas lazy
+│   │   ├── hooks/
+│   │   │   └── useHasPermission.ts       # oculta acciones sin permiso
+│   │   └── utils/
+│   │       ├── berries.ts                # formato de recompensas
+│   │       ├── nivel-amenaza.ts
+│   │       └── fecha.ts                  # portado de la v1
+│   │
+│   ├── features/                         # ZONA DE TRABAJO PARALELO
+│   │   ├── auth/                         # RF-7 · DUEÑO: Dev 1
+│   │   │   ├── auth.routes.tsx
+│   │   │   └── pages/{LoginPage,MfaPage}.tsx
+│   │   │
+│   │   ├── criminales/                   # RF-1 · DUEÑO: Dev 2  (REFERENCIA)
+│   │   │   ├── criminales.routes.tsx     # ÚNICO archivo de rutas de Dev 2
+│   │   │   ├── pages/
+│   │   │   │   ├── CriminalListPage.tsx
+│   │   │   │   ├── CriminalDetailPage.tsx
+│   │   │   │   └── CriminalFormPage.tsx
+│   │   │   ├── components/
+│   │   │   ├── data-access/
+│   │   │   │   ├── criminales-api.ts
+│   │   │   │   └── criminales.store.ts   # estado con Zustand
+│   │   │   └── models/
+│   │   │       └── criminal.ts
+│   │   │
+│   │   ├── inteligencia/                 # RF-3 · DUEÑO: Dev 5  (PORTADO DE LA v1)
+│   │   │   ├── inteligencia.routes.tsx
+│   │   │   ├── pages/
+│   │   │   │   ├── AvistamientosPage.tsx # CRUD de la v1, ya en la arquitectura
+│   │   │   │   └── ReportesPage.tsx
+│   │   │   ├── data-access/
+│   │   │   │   └── inteligencia-api.ts
+│   │   │   └── models/
+│   │   │       └── avistamiento.ts
+│   │   │
+│   │   ├── recompensas/                  # RF-1/RF-5 · DUEÑO: Dev 3
+│   │   ├── amenaza/                      # RF-5 · DUEÑO: Dev 3
+│   │   ├── carteles/                     # RF-2 · DUEÑO: Dev 4
+│   │   ├── operativos/                   # RF-4 · DUEÑO: Dev 6
+│   │   ├── incidentes/                   # RF-6 · DUEÑO: Dev 6
+│   │   └── admin/                        # RF-7 · DUEÑO: Dev 1
+│   │       (cada una: <feature>.routes.tsx, pages/, components/,
+│   │        data-access/, models/)
+│   │
+│   └── assets/
+│       ├── images/
+│       ├── fonts/
+│       ├── icons/
+│       └── i18n/es.json
+├── index.html
+├── vite.config.ts                        # proxy /api, alias y config de vitest
+├── tsconfig.json                         # referencias a app y node
+├── tsconfig.app.json
+├── tsconfig.node.json
+├── .eslintrc.json                        # GENERADO: ver nota en 4.6
 ├── .prettierrc
 ├── .editorconfig
+├── .gitattributes
+├── .env.example
 ├── commitlint.config.cjs
-├── angular.json
-├── tsconfig.json
-├── tsconfig.app.json
-├── tsconfig.spec.json
 ├── package.json
 └── README.md
 ```
 
 **Mapa de responsabilidades en el frontend:**
 
-| Elemento                 | Ubicación                                                                |
-| ------------------------ | ------------------------------------------------------------------------ |
-| Componentes por feature  | `features/<x>/pages/` (con ruta) y `features/<x>/components/` (internos) |
-| Servicios HTTP           | `features/<x>/data-access/*-api.service.ts`                              |
-| Estado                   | `features/<x>/data-access/*.store.ts` (signals)                          |
-| Modelos / tipos          | `features/<x>/models/`                                                   |
-| Guardias RBAC            | `core/guards/`                                                           |
-| Interceptores            | `core/interceptors/`                                                     |
-| UI reutilizable          | `shared/ui/`                                                             |
-| Assets                   | `src/assets/`                                                            |
-| Configuración de entorno | `src/environments/`                                                      |
+| Elemento                 | Ubicación                                                   |
+| ------------------------ | ----------------------------------------------------------- |
+| Páginas (con ruta)       | `features/<x>/pages/`                                       |
+| Componentes internos     | `features/<x>/components/`                                  |
+| Módulos HTTP             | `features/<x>/data-access/<x>-api.ts`                       |
+| Estado                   | `features/<x>/data-access/<x>.store.ts` (Zustand)           |
+| Modelos / tipos          | `features/<x>/models/`                                      |
+| Rutas de la feature      | `features/<x>/<x>.routes.tsx`                               |
+| Guardias RBAC            | `core/guards/`                                              |
+| Interceptores            | `core/http/*.interceptor.ts`, compuestos en `api-client.ts` |
+| UI reutilizable          | `shared/ui/`                                                |
+| Assets                   | `src/assets/`                                               |
+| Configuración de entorno | `vite.config.ts` + `.env` (`VITE_API_URL`)                  |
 
 ---
 
@@ -579,7 +534,7 @@ git fetch origin && git rebase origin/develop
 
 ### 3.2 Asignación de módulos — Sprint 1 (2 semanas)
 
-**Principio rector: vertical slice ownership.** Cada dev es dueño del _stack completo_ de su módulo (entidad + casos de uso + controller + feature de Angular). No se divide "uno hace backend y otro hace el frontend del mismo módulo": eso genera dependencia mutua diaria, y un bloqueado bloquea a dos. Con slices verticales, un dev puede terminar su RF sin esperar a nadie.
+**Principio rector: vertical slice ownership.** Cada dev es dueño del _stack completo_ de su módulo (entidad + casos de uso + controller + feature del frontend). No se divide "uno hace backend y otro hace el frontend del mismo módulo": eso genera dependencia mutua diaria, y un bloqueado bloquea a dos. Con slices verticales, un dev puede terminar su RF sin esperar a nadie.
 
 | Dev       | Rol Scrum / RBAC del caso                                | Backend (dueño)                                                      | Frontend (dueño)                             | Entregable Sprint 1                                                                                                        |
 | --------- | -------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -650,13 +605,13 @@ Más un `CODEOWNERS` para que el reviewer se asigne solo:
 
 Los únicos puntos de conflicto estructural, y su mitigación:
 
-| Archivo                 | Por qué colisiona                   | Mitigación                                                                                                                |
-| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `src/app.module.ts`     | todos registran su módulo           | cada dev agrega **una línea** en orden alfabético y la añade el día 1 ya vacía. Conflicto trivial: se aceptan ambos lados |
-| `src/app/app.routes.ts` | todos agregan su ruta lazy          | igual: una línea por feature, en orden alfabético, declaradas todas el día 1 apuntando a un placeholder                   |
-| Migraciones             | dos devs generan migración a la vez | nombre con timestamp + nunca editar una migración ya mergeada; se corrige con una nueva                                   |
-| `package.json`          | dos devs instalan dependencias      | una sola persona (Dev 1) aprueba nuevas dependencias; el lockfile se resuelve regenerándolo, no editándolo a mano         |
-| `shared/` y `core/`     | zona común                          | protegidos por `CODEOWNERS`: pasan por el Lead                                                                            |
+| Archivo              | Por qué colisiona                   | Mitigación                                                                                                                |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `src/app.module.ts`  | todos registran su módulo           | cada dev agrega **una línea** en orden alfabético y la añade el día 1 ya vacía. Conflicto trivial: se aceptan ambos lados |
+| `src/app/routes.tsx` | todos agregan su ruta lazy          | igual: una línea por feature, en orden alfabético, declaradas todas el día 1 apuntando a un placeholder                   |
+| Migraciones          | dos devs generan migración a la vez | nombre con timestamp + nunca editar una migración ya mergeada; se corrige con una nueva                                   |
+| `package.json`       | dos devs instalan dependencias      | una sola persona (Dev 1) aprueba nuevas dependencias; el lockfile se resuelve regenerándolo, no editándolo a mano         |
+| `shared/` y `core/`  | zona común                          | protegidos por `CODEOWNERS`: pasan por el Lead                                                                            |
 
 Procedimiento ante conflicto: lo resuelve **quien abrió el PR**, en su rama, con rebase. Si el conflicto es en `shared/`, `core/` o `package.json`, se resuelve en pareja con el Lead. Para el lockfile:
 
@@ -744,54 +699,62 @@ Scripts de `package.json` (backend):
 ### 4.2 Inicialización del frontend
 
 ```bash
-npm i -g @angular/cli
-ng new marine-fleet-frontend --style=scss --ssr=false --routing --strict
+npm create vite@latest marine-fleet-frontend -- --template react-ts
 cd marine-fleet-frontend
 
-npm i @angular/material @angular/cdk
-npm i -D eslint prettier eslint-config-prettier
-ng add @angular-eslint/schematics
+# Enrutamiento y estado
+npm i react-router-dom zustand
+
+# Pruebas
+npm i -D vitest jsdom @testing-library/react @testing-library/dom \
+         @testing-library/jest-dom @testing-library/user-event
+
+# Calidad
+npm i -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin \
+         eslint-plugin-react-hooks eslint-config-prettier eslint-plugin-prettier prettier
 npm i -D husky lint-staged @commitlint/cli @commitlint/config-conventional
 npx husky init
 
-# Estructura base (ejecutado por el Lead el día 1)
-mkdir -p src/app/core/{auth,guards,interceptors,http,models,layout,services}
-mkdir -p src/app/shared/{ui,directives,pipes,validators,utils}
-mkdir -p src/assets/{images,fonts,icons,i18n}
+# Estructura base (la ejecuta el Lead el día 1)
+mkdir -p src/app src/core/{session,guards,http,models,layout,services}
+mkdir -p src/shared/{ui,hooks,utils} src/assets/{images,fonts,icons,i18n}
 
-# Un comando por feature; cada dev genera lo suyo dentro de SU carpeta
+# Una carpeta por feature; cada dev trabaja solo dentro de la suya
 for f in auth criminales recompensas amenaza carteles inteligencia operativos incidentes admin; do
-  mkdir -p "src/app/features/$f"/{pages,components,data-access,models}
+  mkdir -p "src/features/$f"/{pages,components,data-access,models}
 done
 ```
+
+> **`vitest` debe ir alineado con `vite`.** Con `vitest` 2 y `vite` 6, npm instala una copia anidada de Vite dentro de vitest y el typecheck de `vite.config.ts` falla con un choque de tipos de `Plugin`. La combinación verificada aquí es **vite 6 + vitest 3**. Y el `defineConfig` del archivo de configuración debe importarse de `vitest/config`, no de `vite`: el de `vite` no acepta la clave `test`.
 
 Scripts de `package.json` (frontend):
 
 ```json
 {
   "scripts": {
-    "start": "ng serve --proxy-config proxy.conf.json",
-    "build": "ng build",
-    "build:prod": "ng build --configuration production",
-    "lint": "ng lint --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{ts,html,scss}\"",
-    "test": "ng test --watch=false --browsers=ChromeHeadless",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\" \"*.{ts,json,cjs,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\" \"*.{ts,json,cjs,md}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "husky"
   }
 }
 ```
 
-`proxy.conf.json` evita que cada dev tenga que configurar CORS a mano:
+El proxy de `vite.config.ts` evita que cada dev tenga que configurar CORS a mano: el frontend pide `/api/...` a su propio origen y Vite lo reenvía al backend.
 
-```json
-{
-  "/api": {
-    "target": "http://localhost:3000",
-    "secure": false,
-    "changeOrigin": true
-  }
+```ts
+server: {
+  port: 5173,
+  proxy: { '/api': { target: 'http://localhost:3000', changeOrigin: true } },
 }
 ```
+
+Por eso `VITE_API_URL` va **vacía** en desarrollo. Solo se usa para apuntar a un backend remoto, por ejemplo un entorno de staging.
 
 ### 4.3 `tsconfig.json` — backend
 
@@ -828,40 +791,44 @@ Lo importante es `strict: true` desde el día 1 (activarlo después, con 10 000 
 }
 ```
 
-### 4.4 `tsconfig.json` — frontend
+### 4.4 `tsconfig` — frontend
+
+Se usan tres archivos, que es el patrón de Vite: `tsconfig.json` solo referencia a los otros dos, `tsconfig.app.json` cubre `src/` y `tsconfig.node.json` cubre `vite.config.ts`. Separarlos importa porque el código del navegador y el de configuración no comparten `lib` ni `types`.
 
 ```json
 {
-  "compileOnSave": false,
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ES2022", "dom"],
-    "baseUrl": "./",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "skipLibCheck": true,
+
     "strict": true,
-    "noImplicitOverride": true,
-    "noPropertyAccessFromIndexSignature": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true,
-    "esModuleInterop": true,
-    "experimentalDecorators": true,
+    "noUncheckedSideEffectImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "baseUrl": ".",
     "paths": {
-      "@core/*": ["src/app/core/*"],
-      "@shared/*": ["src/app/shared/*"],
-      "@features/*": ["src/app/features/*"],
-      "@env/*": ["src/environments/*"]
-    }
+      "@app/*": ["src/app/*"],
+      "@core/*": ["src/core/*"],
+      "@shared/*": ["src/shared/*"],
+      "@features/*": ["src/features/*"]
+    },
+
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "angularCompilerOptions": {
-    "enableI18nLegacyMessageIdFormat": false,
-    "strictInjectionParameters": true,
-    "strictInputAccessModifiers": true,
-    "strictTemplates": true
-  }
+  "include": ["src"]
 }
 ```
+
+`strict: true` desde el día 1 (activarlo después, con 10 000 líneas escritas, no ocurre nunca) y los path aliases, que evitan los `../../../` y, con ellos, los conflictos cuando alguien mueve una carpeta. **Los mismos alias deben declararse en `resolve.alias` de `vite.config.ts`**: TypeScript resuelve con uno y el bundler con el otro, y si se desalinean el editor compila pero el build no.
 
 ### 4.5 ESLint — backend (`.eslintrc.cjs`)
 
@@ -959,52 +926,54 @@ module.exports = {
 ```json
 {
   "root": true,
+  "env": { "browser": true, "es2022": true },
   "overrides": [
     {
-      "files": ["*.ts"],
+      "files": ["*.ts", "*.tsx"],
       "parser": "@typescript-eslint/parser",
-      "parserOptions": { "project": ["tsconfig.json"], "createDefaultProgram": true },
-      "plugins": ["@typescript-eslint"],
+      "parserOptions": {
+        "project": ["./tsconfig.app.json", "./tsconfig.node.json"],
+        "ecmaFeatures": { "jsx": true }
+      },
+      "plugins": ["@typescript-eslint", "react-hooks"],
       "extends": [
+        "eslint:recommended",
         "plugin:@typescript-eslint/recommended",
-        "plugin:@angular-eslint/recommended",
-        "plugin:@angular-eslint/template/process-inline-templates",
+        "plugin:react-hooks/recommended",
         "plugin:prettier/recommended"
       ],
       "rules": {
-        "@angular-eslint/component-selector": [
-          "error",
-          { "type": "element", "prefix": "app", "style": "kebab-case" }
-        ],
-        "@angular-eslint/prefer-standalone": "error",
-        "@angular-eslint/use-lifecycle-interface": "error",
         "@typescript-eslint/no-explicit-any": "error",
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/explicit-function-return-type": [
+          "warn",
+          { "allowExpressions": true, "allowTypedFunctionExpressions": true }
+        ],
         "no-console": ["error", { "allow": ["warn", "error"] }]
       }
-    },
-    // + un bloque por feature con no-restricted-imports (ver la nota de abajo)
-    {
-      "files": ["*.html"],
-      "extends": [
-        "plugin:@angular-eslint/template/recommended",
-        "plugin:@angular-eslint/template/accessibility"
-      ]
     }
+    // + un bloque por zona y por feature con no-restricted-imports (ver abajo)
   ]
 }
 ```
 
-> **`plugins` y `parser` no son opcionales aquí.** `plugin:@angular-eslint/recommended` no carga `@typescript-eslint`, así que declarar reglas `@typescript-eslint/*` sin el `plugins` y el `extends` de arriba produce 112 errores de tipo _"Definition for rule was not found"_ y ni una sola verificación real.
+> **`allowExpressions` no es opcional.** En React los manejadores inline (`onClick={() => …}`) son expresiones de función; sin esa opción, `explicit-function-return-type` marca cada uno y, con `--max-warnings 0`, el lint falla en toda página con un botón.
+
+> **`plugins` y `parser` tampoco.** Declarar reglas `@typescript-eslint/*` sin cargar el plugin produce decenas de errores _"Definition for rule was not found"_ y ni una sola verificación real. Pasó en este proyecto con 112 errores de ese tipo.
 
 **Cómo se enforza de verdad el aislamiento entre features** (esto se verificó, no se asumió):
 
-Un patrón único no sirve. Un import a otra feature se escribe con una cantidad variable de `../` según la profundidad del archivo (`../criminales/...` desde la raíz del feature, `../../../criminales/...` desde `pages/x/`), así que un patrón como `../../*/data-access/*` solo atrapa una profundidad concreta y deja pasar el resto. Comprobado: una violación escrita tres niveles abajo no la detectaba.
+Un patrón único no sirve. Un import a otra feature se escribe con una cantidad variable de `../` según la profundidad del archivo (`../criminales/...` desde la raíz de la feature, `../../../criminales/...` desde `pages/x/`), así que un patrón que fije la profundidad deja pasar el resto. Comprobado: una violación escrita tres niveles abajo no se detectaba.
 
-Lo que sí funciona es **un `overrides` por feature, cada uno prohibiendo el nombre de las otras ocho** con el patrón `**/<otra-feature>/**`, que empareja a cualquier profundidad. Son nueve bloques casi idénticos, así que `.eslintrc.json` del frontend **se genera con un script** (está en el historial del repo) en lugar de escribirse a mano: nueve bloques copiados a mano es una invitación a un typo que desactiva la regla en silencio.
+Lo que sí funciona es **un `overrides` por feature, cada uno prohibiendo el nombre de las otras ocho** con el patrón `**/<otra-feature>/**`, que empareja a cualquier profundidad, más `@features/*` para la forma con alias. Son nueve bloques casi idénticos, así que `.eslintrc.json` **se genera con un script** en lugar de escribirse a mano: nueve bloques copiados a mano son una invitación a un typo que desactiva la regla en silencio.
 
-Se evaluó `eslint-plugin-boundaries`, que modela zonas explícitamente y sería la opción correcta a mayor escala. Se descartó: en la versión 7 su clasificación de elementos no reconoció esta estructura sin más configuración, y una regla que no dispara es peor que ninguna porque da falsa confianza. La versión con `no-restricted-imports` está verificada con pruebas negativas en las tres direcciones (feature → otra feature, `core/` → `shared/`, `shared/` → feature).
+Se evaluó `eslint-plugin-boundaries`, que modela zonas explícitamente y sería la opción correcta a mayor escala. Se descartó: en su versión 7 la clasificación de elementos no reconoció esta estructura sin más configuración, y una regla que no dispara es peor que ninguna porque da falsa confianza.
 
-> **Por qué `core/session/` y no `core/auth/`:** el enforcement anterior se basa en nombres de carpeta, y `core/auth/` colisionaba con `features/auth/`: el patrón `**/auth/**` marcaba como violación cualquier import legítimo de `core/auth/auth.service`. Renombrar la carpeta de `core` a `session` elimina la colisión y además quita una ambigüedad real del código: `core/session/` es el estado de la sesión y los permisos, `features/auth/` son las pantallas de login y MFA. Eran dos cosas distintas con el mismo nombre.
+La versión con `no-restricted-imports` está verificada con **pruebas negativas en las tres direcciones**: feature → otra feature (relativo y con alias), `core/` → `shared/`, y `shared/` → feature. Las cuatro violaciones de prueba fueron rechazadas y el código real sigue pasando.
+
+> **Por qué `core/session/` y no `core/auth/`:** el enforcement se basa en nombres de carpeta, y `core/auth/` colisionaba con `features/auth/`: el patrón `**/auth/**` marcaba como violación cualquier import legítimo de `core/auth/session.service`. Renombrar la carpeta de `core` a `session` elimina la colisión y además quita una ambigüedad real del código: `core/session/` es el estado de la sesión y los permisos; `features/auth/` son las pantallas de login y MFA. Eran dos cosas distintas con el mismo nombre.
+
+**Al agregar o renombrar una feature hay que actualizar los nueve bloques**, no solo el propio: si el nombre nuevo no aparece en la lista de prohibiciones de las otras ocho, la regla no protege nada y nadie se da cuenta.
 
 ### 4.7 Prettier y EditorConfig (idénticos en ambos repos)
 
@@ -1071,7 +1040,7 @@ npx --no -- commitlint --edit "$1"
 ```json
 {
   "lint-staged": {
-    "*.{ts,html,scss,json,md}": ["prettier --write"],
+    "*.{ts,tsx,css,json,md}": ["prettier --write"],
     "*.ts": ["eslint --fix --max-warnings 0"]
   }
 }
@@ -1157,7 +1126,7 @@ JWT_EXPIRES_IN=15m
 JWT_REFRESH_SECRET=cambiar-en-cada-entorno
 JWT_REFRESH_EXPIRES_IN=7d
 
-FRONTEND_URL=http://localhost:4200
+FRONTEND_URL=http://localhost:5173
 STORAGE_PATH=./storage/carteles
 ```
 
@@ -1165,32 +1134,43 @@ STORAGE_PATH=./storage/carteles
 
 ## 5. Resumen de las decisiones que sostienen el trabajo en paralelo
 
-| Decisión                                                     | Problema que elimina                             |
-| ------------------------------------------------------------ | ------------------------------------------------ |
-| Un módulo NestJS por RF, con dueño único                     | Seis personas editando `server.ts`               |
-| Puertos e inversión de dependencias                          | Esperar a que el módulo de otro esté terminado   |
-| Contratos (DTOs/OpenAPI) mergeados el día 2                  | Backend y frontend desincronizados               |
-| Vertical slice ownership (back + front por dev)              | Dependencia diaria entre dos personas por módulo |
-| `*.routes.ts` por feature con `loadChildren`                 | Conflictos en el router raíz de Angular          |
-| Standalone components                                        | Conflictos en `declarations[]`                   |
-| TypeORM (entidad y migración por archivo) en lugar de Prisma | `schema.prisma` como nuevo cuello de botella     |
-| Prettier + EditorConfig + `.gitattributes eol=lf`            | Conflictos falsos por formato y CRLF en Windows  |
-| ESLint con límites de capa y entre features                  | Erosión silenciosa de la arquitectura            |
-| Husky + commitlint + CI como check requerido                 | Convenciones documentadas que nadie cumple       |
-| `CODEOWNERS` + ramas protegidas + squash merge               | Revisión informal e historia ilegible            |
-| Ramas de máximo 3 días, PR de máximo 400 líneas              | Merges gigantes al final del sprint              |
+| Decisión                                                     | Problema que elimina                               |
+| ------------------------------------------------------------ | -------------------------------------------------- |
+| Un módulo NestJS por RF, con dueño único                     | Seis personas editando `server.ts`                 |
+| Puertos e inversión de dependencias                          | Esperar a que el módulo de otro esté terminado     |
+| Contratos (DTOs/OpenAPI) mergeados el día 2                  | Backend y frontend desincronizados                 |
+| Vertical slice ownership (back + front por dev)              | Dependencia diaria entre dos personas por módulo   |
+| `*.routes.tsx` por feature, referenciado con una línea       | Conflictos en el router raíz                       |
+| `React.lazy` por página                                      | Un bundle monolítico y acoplamiento entre features |
+| Interceptores HTTP en `core/http/`, no en cada feature       | Seis manejos distintos del mismo 403               |
+| TypeORM (entidad y migración por archivo) en lugar de Prisma | `schema.prisma` como nuevo cuello de botella       |
+| Prettier + EditorConfig + `.gitattributes eol=lf`            | Conflictos falsos por formato y CRLF en Windows    |
+| ESLint con límites de capa y entre features                  | Erosión silenciosa de la arquitectura              |
+| Husky + commitlint + CI como check requerido                 | Convenciones documentadas que nadie cumple         |
+| `CODEOWNERS` + ramas protegidas + squash merge               | Revisión informal e historia ilegible              |
+| Ramas de máximo 3 días, PR de máximo 400 líneas              | Merges gigantes al final del sprint                |
 
 ---
 
-## 6. Dónde está el scaffolding y cómo separarlo en dos repositorios
+## 6. Estado de los repositorios
 
-El esqueleto de ambos proyectos ya está generado en este repositorio, como dos carpetas
-autocontenidas: `marine-fleet-backend/` y `marine-fleet-frontend/`. Cada una tiene su propio
-`package.json`, `tsconfig`, ESLint, Prettier, `.gitignore`, `.gitattributes`, hooks de Husky,
-workflow de CI, `CODEOWNERS` y plantilla de PR, de modo que funcionan tal cual al extraerlas.
+Los dos proyectos son ya **repositorios git independientes**, hermanos en el disco:
 
-Las carpetas `backend/`, `frontend/` y `database/` de la versión 1 **se dejan intactas**: son
-el sistema que hoy funciona y la fuente del esquema SQL. Se eliminan cuando el Sprint 1 cierre.
+```
+6 Semestre/
+├── marine-fleet-backend/     repo git propio · ramas: main, develop
+├── marine-fleet-frontend/    repo git propio · ramas: main, develop, archive/scaffold-angular
+└── Caso_13_IngSoft/          la v1 que funciona hoy (React + Express) y el esquema SQL
+```
+
+Cada repositorio tiene su propio `package.json`, `tsconfig`, ESLint, Prettier, `.gitignore`,
+`.gitattributes`, hooks de Husky, workflow de CI, `CODEOWNERS`, plantilla de PR y una copia de
+este documento. `Caso_13_IngSoft/` **se deja intacto**: es el sistema que funciona y la fuente
+del esquema SQL. Se retira cuando el Sprint 1 cierre.
+
+La rama `archive/scaffold-angular` del frontend conserva el primer scaffolding, que se hizo en
+Angular antes de decidir quedarse en React. No se borró para no destruir trabajo, pero **no se
+mergea a nada**: está ahí solo como registro.
 
 **Instalación (cada dev, una vez):**
 
@@ -1200,42 +1180,37 @@ npm run migration:run && npm run seed && npm run start:dev
 ```
 
 ```bash
-cd marine-fleet-frontend && npm install && npm start
+cd marine-fleet-frontend && npm install && npm run dev
 ```
 
-Las dependencias no están instaladas: el scaffolding incluye los `package.json` con las
-versiones elegidas, pero `npm install` lo corre cada quien en su máquina. Hasta entonces el
-editor marcará los imports de `@nestjs/*` y `@angular/*` como no resueltos; es lo esperado.
+El backend queda en `http://localhost:3000` (Swagger en `/api/docs`) y el frontend en
+`http://localhost:5173`. El frontend **necesita el backend arriba**: su proxy reenvía `/api`.
 
-**Extracción a dos repositorios independientes** (lo hace el Lead el día 1):
+### Lo que falta para que el equipo pueda trabajar
 
-```bash
-# Backend
-cd marine-fleet-backend
-git init -b main
-git add . && git commit -m "chore(ci): scaffolding inicial del backend"
-git remote add origin git@github.com:<org>/marine-fleet-backend.git
-git push -u origin main
-git checkout -b develop && git push -u origin develop
-```
+1. **Crear los dos repositorios vacíos en GitHub** —sin README, sin `.gitignore` y sin
+   licencia— y agregar el remoto a cada repo local, luego `git push -u origin main` y
+   `git push -u origin develop`.
+2. **Reemplazar `@dev1`…`@dev6` en los dos `CODEOWNERS`** por los usuarios reales. Mientras
+   sean placeholders, GitHub marca el archivo como inválido, no asigna reviewers y la política
+   de revisión queda escrita pero sin efecto.
+3. **Aplicar las reglas de protección de la sección 3.3** sobre `main` y `develop` en ambos
+   repositorios, y poner `develop` como rama por defecto para que los PR apunten ahí.
 
-Lo mismo para `marine-fleet-frontend`. Después, en GitHub: aplicar las reglas de protección de
-la sección 3.3 sobre `main` y `develop`, y reemplazar `@dev1`…`@dev6` en los dos `CODEOWNERS`
-por los usuarios reales. Sin ese reemplazo, GitHub no asigna reviewers y la política de PR
-queda escrita pero no vigente.
+### Qué quedó implementado
 
-### Qué quedó implementado en el scaffolding
-
-| Zona                                    | Estado                                                                                                                                                                                        |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Backend `config/`, `common/`, `shared/` | Completo: guards RBAC (globales), 3 interceptores, filtro de excepciones con traducción de errores de dominio a HTTP, paginación, value objects, eventos de dominio, puerto de almacenamiento |
-| Backend `modules/criminales`            | **Slice vertical de referencia** (RF-1): 4 entidades, 2 puertos, 4 casos de uso, adaptador TypeORM, controller con RBAC y auditoría, 3 DTOs, mapper y 2 archivos de pruebas                   |
-| Backend `modules/amenaza`               | Motor de clasificación de RF-5 implementado y probado (función pura, 6 casos de prueba)                                                                                                       |
-| Backend migraciones                     | `CreateOperativos` y `CreateIncidentes`: las tablas que faltaban para RF-4 y RF-6                                                                                                             |
-| Backend seed                            | Los 7 roles con su matriz de permisos y un usuario por rol para probar RBAC                                                                                                                   |
-| Frontend `core/`                        | Completo: sesión con signals, `authGuard`, `roleGuard`, 4 interceptores, cliente HTTP, layout con menú filtrado por permisos, notificaciones                                                  |
-| Frontend `features/criminales`          | **Slice de referencia**: modelo, api service, store con signals y página de listado con los tres estados                                                                                      |
-| Frontend resto de features              | Rutas declaradas con sus guards + página placeholder que nombra lo pendiente y su responsable                                                                                                 |
+| Zona                                    | Estado                                                                                                                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend `config/`, `common/`, `shared/` | Completo: guards RBAC globales, 3 interceptores, filtro de excepciones con traducción de errores de dominio a HTTP, paginación, value objects, eventos de dominio, puerto de almacenamiento |
+| Backend `modules/criminales`            | **Slice vertical de referencia** (RF-1): 4 entidades, 2 puertos, 4 casos de uso, adaptador TypeORM, controller con RBAC y auditoría, 3 DTOs, mapper y pruebas sin base de datos             |
+| Backend `modules/amenaza`               | Motor de clasificación de RF-5 implementado y probado (función pura, 6 casos de prueba)                                                                                                     |
+| Backend migraciones                     | `CreateOperativos` y `CreateIncidentes`: las tablas que faltaban para RF-4 y RF-6                                                                                                           |
+| Backend seed                            | Los 7 roles con su matriz de permisos y un usuario por rol para probar RBAC                                                                                                                 |
+| Frontend `core/`                        | Completo: sesión con Zustand, `RequireAuth`, `RequirePermiso`, los 4 interceptores compuestos sobre `fetch`, cliente HTTP, layout con menú filtrado por permisos, notificaciones            |
+| Frontend `features/criminales`          | **Slice de referencia**: modelo, módulo HTTP, store y página de listado con los tres estados                                                                                                |
+| Frontend `features/inteligencia`        | **CRUD de avistamientos portado de la v1**, ya dentro de la arquitectura. Sin backend hasta que Dev 5 implemente el módulo                                                                  |
+| Frontend resto de features              | Rutas declaradas con sus guards + página placeholder que nombra lo pendiente y su responsable                                                                                               |
+| Verificación                            | En ambos repos pasan `format:check`, `lint`, `test` y `build`. El aislamiento entre capas y entre features está comprobado con pruebas negativas, no asumido                                |
 
 Cada `*.module.ts` del backend y cada página placeholder del frontend lleva en su cabecera la
 lista de archivos pendientes de su sprint. Es el punto de partida de su dueño: nadie empieza

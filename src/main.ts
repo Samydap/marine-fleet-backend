@@ -21,7 +21,7 @@ async function bootstrap(): Promise<void> {
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
   app.enableCors({
-    origin: [config.get<string>('app.frontendUrl') ?? 'http://localhost:4200'],
+    origin: [config.get<string>('app.frontendUrl') ?? 'http://localhost:5173'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });

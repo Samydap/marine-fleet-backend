@@ -22,6 +22,6 @@ export const envValidationSchema = Joi.object({
   BCRYPT_ROUNDS: Joi.number().min(10).max(14).default(10),
   MAX_INTENTOS_FALLIDOS: Joi.number().min(3).default(5),
 
-  FRONTEND_URL: Joi.string().uri().default('http://localhost:4200'),
+  FRONTEND_URL: Joi.string().uri().default('http://localhost:5173'),
   STORAGE_PATH: Joi.string().default('./storage/carteles'),
 });
