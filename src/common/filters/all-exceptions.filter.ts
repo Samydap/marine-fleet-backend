@@ -12,6 +12,7 @@ import { ConcurrencyError } from '../../shared/domain/errors/concurrency.error';
 import { DomainError } from '../../shared/domain/errors/domain.error';
 import { ForbiddenError } from '../../shared/domain/errors/forbidden.error';
 import { NotFoundError } from '../../shared/domain/errors/not-found.error';
+import { UnauthorizedError } from '../../shared/domain/errors/unauthorized.error';
 
 /**
  * Traduce excepciones a HTTP en un solo lugar: los casos de uso lanzan errores
@@ -46,21 +47,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private traducir(exception: unknown): { status: number; message: string; codigo: string } {
-    if (exception instanceof NotFoundError) {
-      return { status: HttpStatus.NOT_FOUND, message: exception.message, codigo: exception.codigo };
-    }
-
-    if (exception instanceof ForbiddenError) {
-      return { status: HttpStatus.FORBIDDEN, message: exception.message, codigo: exception.codigo };
-    }
-
-    if (exception instanceof ConcurrencyError) {
-      return { status: HttpStatus.CONFLICT, message: exception.message, codigo: exception.codigo };
-    }
-
     if (exception instanceof DomainError) {
       return {
-        status: HttpStatus.BAD_REQUEST,
+        status: this.estadoDeDominio(exception),
         message: exception.message,
         codigo: exception.codigo,
       };
@@ -102,5 +91,20 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message: 'Error interno del servidor.',
       codigo: 'INTERNO',
     };
+  }
+
+  /**
+   * Estado HTTP de cada error de dominio. Los especificos van primero: todos
+   * heredan de DomainError, que es el caso general (400).
+   */
+  private estadoDeDominio(error: DomainError): number {
+    const porTipo: ReadonlyArray<[new (...args: never[]) => DomainError, number]> = [
+      [NotFoundError, HttpStatus.NOT_FOUND],
+      [UnauthorizedError, HttpStatus.UNAUTHORIZED],
+      [ForbiddenError, HttpStatus.FORBIDDEN],
+      [ConcurrencyError, HttpStatus.CONFLICT],
+    ];
+
+    return porTipo.find(([tipo]) => error instanceof tipo)?.[1] ?? HttpStatus.BAD_REQUEST;
   }
 }
