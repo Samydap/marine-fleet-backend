@@ -8,7 +8,9 @@ export class LoggingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
-    const { method, url } = request;
+    const { method } = request;
+    // El SSE recibe el token por query string: nunca debe quedar en los logs.
+    const url = request.url.replace(/([?&]token=)[^&]*/i, '$1***');
     const inicio = Date.now();
 
     return next.handle().pipe(

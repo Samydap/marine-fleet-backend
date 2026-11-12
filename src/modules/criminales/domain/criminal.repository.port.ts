@@ -1,15 +1,20 @@
 import type { PageResult } from '../../../shared/application/pagination/page-result';
 import type { Criminal } from './criminal.entity';
-import type { EstadoCriminal, NivelAmenaza } from './estado-criminal.enum';
+import type { CategoriaOrganizacion, EstadoCriminal, NivelAmenaza } from './estado-criminal.enum';
 
 export const CRIMINAL_REPOSITORY = Symbol('CRIMINAL_REPOSITORY');
 
 export interface FiltroCriminales {
+  /** Texto libre: busca en nombre y en alias. */
   readonly q?: string;
   readonly estado?: EstadoCriminal;
   readonly nivelAmenaza?: NivelAmenaza;
   readonly zonaInfluenciaId?: string;
   readonly organizacionId?: string;
+  /** PIRATA | REVOLUCIONARIO | CRIMINAL_INDEPENDIENTE (afiliacion vigente). */
+  readonly categoria?: CategoriaOrganizacion;
+  readonly recompensaMin?: number;
+  readonly recompensaMax?: number;
   readonly page: number;
   readonly limit: number;
   readonly order: 'ASC' | 'DESC';
@@ -21,6 +26,7 @@ export interface FiltroCriminales {
  * otro dev puede stubearla antes de que el adaptador exista.
  */
 export interface CriminalRepositoryPort {
+  /** Carga el criminal con sus membresias y la organizacion de cada una. */
   buscarPorId(id: string): Promise<Criminal | null>;
   buscarPorNombreNormalizado(nombreNormalizado: string): Promise<Criminal | null>;
   listar(filtro: FiltroCriminales): Promise<PageResult<Criminal>>;
@@ -62,6 +68,10 @@ export interface CriminalReaderPort {
   obtenerResumenes(ids: readonly string[]): Promise<CriminalResumen[]>;
   /** Todos los criminales, con lo minimo para reclasificar o regenerar en lote. */
   listarTodosLosIds(): Promise<string[]>;
+  /** Conteo por nivel de amenaza (graficos de distribucion de RF-5). */
+  contarPorNivelAmenaza(
+    soloActivos: boolean,
+  ): Promise<Array<{ nivel: NivelAmenaza; total: number }>>;
 }
 
 /**

@@ -1,7 +1,10 @@
 /* eslint-disable no-console */
 import * as bcrypt from 'bcrypt';
 import dataSource from '../data-source';
-import { clasificarAmenaza, type CriterioVigente } from '../../../../modules/amenaza/domain/motor-clasificacion';
+import {
+  clasificarAmenaza,
+  type CriterioVigente,
+} from '../../../../modules/amenaza/domain/motor-clasificacion';
 import { PERMISOS_POR_ROL } from '../../../domain/rbac/permiso.enum';
 import { RolCodigo, ROLES_CON_MFA_OBLIGATORIO } from '../../../domain/rbac/rol.enum';
 import { NivelAmenaza } from '../../../domain/value-objects/nivel-amenaza.enum';
@@ -56,11 +59,10 @@ const ZONAS_SENSIBLES = /sabaody|marineford|mary geoise/i;
 
 async function sembrarCatalogos(): Promise<void> {
   for (const mar of MARES) {
-    await dataSource.query(`INSERT IGNORE INTO mares (id, nombre, tipo, activo) VALUES (?, ?, ?, 1)`, [
-      mar.id,
-      mar.nombre,
-      mar.tipo,
-    ]);
+    await dataSource.query(
+      `INSERT IGNORE INTO mares (id, nombre, tipo, activo) VALUES (?, ?, ?, 1)`,
+      [mar.id, mar.nombre, mar.tipo],
+    );
   }
   for (const zona of ZONAS) {
     await dataSource.query(
@@ -109,7 +111,14 @@ async function sembrarRolesYUsuarios(): Promise<void> {
        VALUES (?, ?, ?, ?, ?, ?, 'ACTIVO', 0, 0, 1)
        ON DUPLICATE KEY UPDATE rol_id = VALUES(rol_id), password_hash = VALUES(password_hash),
          base_naval_id = VALUES(base_naval_id), estado = 'ACTIVO', intentos_fallidos = 0`,
-      [`u-${codigo.toLowerCase()}`, NOMBRES_ROL[codigo], email, passwordHash, rolId, BASE_POR_ROL[codigo] ?? null],
+      [
+        `u-${codigo.toLowerCase()}`,
+        NOMBRES_ROL[codigo],
+        email,
+        passwordHash,
+        rolId,
+        BASE_POR_ROL[codigo] ?? null,
+      ],
     );
 
     console.warn(`Rol y usuario: ${codigo} (${email} / Marina.2026)`);
@@ -129,7 +138,9 @@ async function sembrarCriterios(): Promise<void> {
 async function sembrarCriminales(): Promise<void> {
   const analista = 'u-analista_datos_criminales';
   const zonasGrandLine = new Set<string>(
-    ZONAS.filter((z) => MARES.find((m) => m.id === z.marId)?.tipo === 'GRAND_LINE').map((z) => z.id),
+    ZONAS.filter((z) => MARES.find((m) => m.id === z.marId)?.tipo === 'GRAND_LINE').map(
+      (z) => z.id,
+    ),
   );
 
   for (const org of ORGANIZACIONES) {
@@ -174,7 +185,14 @@ async function sembrarCriminales(): Promise<void> {
       await dataSource.query(
         `INSERT IGNORE INTO membresias (id, criminal_id, organizacion_id, rol, vigente, fecha_ingreso, creado_por)
          VALUES (?, ?, ?, ?, 1, ?, ?)`,
-        [`m-${c.id}`, c.id, c.organizacionId, c.rolOrganizacion, new Date('2024-01-01T00:00:00Z'), analista],
+        [
+          `m-${c.id}`,
+          c.id,
+          c.organizacionId,
+          c.rolOrganizacion,
+          new Date('2024-01-01T00:00:00Z'),
+          analista,
+        ],
       );
     }
 
@@ -183,7 +201,14 @@ async function sembrarCriminales(): Promise<void> {
         `INSERT IGNORE INTO recompensas (id, criminal_id, monto, moneda, estado, requiere_validacion,
            solicitada_por, validada_por, fecha_validacion, vigente_desde, motivo)
          VALUES (?, ?, ?, 'BERRIES', 'VIGENTE', ?, ?, ?, NOW(), NOW(), 'Recompensa inicial')`,
-        [`rc-${c.id}`, c.id, c.recompensa, c.recompensa >= 1_000_000_000 ? 1 : 0, analista, 'u-almirante'],
+        [
+          `rc-${c.id}`,
+          c.id,
+          c.recompensa,
+          c.recompensa >= 1_000_000_000 ? 1 : 0,
+          analista,
+          'u-almirante',
+        ],
       );
     }
   }
@@ -193,7 +218,17 @@ async function sembrarCriminales(): Promise<void> {
       `INSERT IGNORE INTO recompensas (id, criminal_id, monto, moneda, estado, requiere_validacion,
          solicitada_por, vigente_desde, vigente_hasta, motivo)
        VALUES (?, ?, ?, 'BERRIES', ?, ?, ?, ?, ?, ?)`,
-      [r.id, r.criminalId, r.monto, r.estado, r.requiereValidacion ? 1 : 0, analista, r.desde, r.hasta, r.motivo],
+      [
+        r.id,
+        r.criminalId,
+        r.monto,
+        r.estado,
+        r.requiereValidacion ? 1 : 0,
+        analista,
+        r.desde,
+        r.hasta,
+        r.motivo,
+      ],
     );
   }
 
@@ -222,7 +257,15 @@ async function sembrarInteligencia(): Promise<void> {
       `INSERT IGNORE INTO reportes_ciudadanos (id, criminal_id, descripcion, fecha_hecho, ubicacion,
          zona_influencia_id, informante, estado)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDIENTE')`,
-      [r.id, r.criminalId, r.descripcion, r.fecha, r.ubicacion, r.zonaId, JSON.stringify(r.informante)],
+      [
+        r.id,
+        r.criminalId,
+        r.descripcion,
+        r.fecha,
+        r.ubicacion,
+        r.zonaId,
+        JSON.stringify(r.informante),
+      ],
     );
   }
 }
@@ -235,7 +278,9 @@ async function main(): Promise<void> {
   await sembrarCriminales();
   await sembrarInteligencia();
   await dataSource.destroy();
-  console.warn('Seed completado. Para generar los carteles iniciales: POST /api/v1/carteles/regenerar-todos');
+  console.warn(
+    'Seed completado. Para generar los carteles iniciales: POST /api/v1/carteles/regenerar-todos',
+  );
 }
 
 main().catch((error) => {

@@ -1,10 +1,6 @@
 /** Columna `auditoria.tipo_accion` (clase Auditoria del diagrama). */
 export type TipoAccionAuditoria =
-  | 'CREACION'
-  | 'ACTUALIZACION'
-  | 'ELIMINACION_LOGICA'
-  | 'CONSULTA'
-  | 'AUTENTICACION';
+  'CREACION' | 'ACTUALIZACION' | 'ELIMINACION_LOGICA' | 'CONSULTA' | 'AUTENTICACION';
 
 export const AUDITORIA_WRITER = Symbol('AUDITORIA_WRITER');
 

@@ -132,7 +132,12 @@ export class InitSchema1731200000000 implements MigrationInterface {
         CONSTRAINT fk_criminales_actualizado FOREIGN KEY (actualizado_por)
           REFERENCES usuarios(id) ON DELETE SET NULL
       ) ${TABLA}`);
-    await this.indice(queryRunner, 'criminales', 'ix_criminales_estado_nivel', 'estado, nivel_amenaza');
+    await this.indice(
+      queryRunner,
+      'criminales',
+      'ix_criminales_estado_nivel',
+      'estado, nivel_amenaza',
+    );
     await this.indice(queryRunner, 'criminales', 'ix_criminales_zona', 'zona_influencia_id');
 
     await queryRunner.query(`
@@ -186,7 +191,12 @@ export class InitSchema1731200000000 implements MigrationInterface {
         CONSTRAINT fk_recompensas_criminal FOREIGN KEY (criminal_id)
           REFERENCES criminales(id) ON DELETE CASCADE
       ) ${TABLA}`);
-    await this.indice(queryRunner, 'recompensas', 'ix_recompensas_criminal_estado', 'criminal_id, estado');
+    await this.indice(
+      queryRunner,
+      'recompensas',
+      'ix_recompensas_criminal_estado',
+      'criminal_id, estado',
+    );
 
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS criterios_amenaza (
@@ -307,7 +317,12 @@ export class InitSchema1731200000000 implements MigrationInterface {
         VALUES (NEW.id, 'REGISTRO', NULL, NEW.nombre, NEW.creado_por)`);
   }
 
-  private async indice(qr: QueryRunner, tabla: string, nombre: string, columnas: string): Promise<void> {
+  private async indice(
+    qr: QueryRunner,
+    tabla: string,
+    nombre: string,
+    columnas: string,
+  ): Promise<void> {
     const existe = (await qr.query(
       `SELECT COUNT(*) AS n FROM information_schema.statistics
         WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,

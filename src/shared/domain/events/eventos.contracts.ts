@@ -85,7 +85,8 @@ export interface ReporteAprobadoEvent {
   readonly usuarioId: string;
 }
 
-export type CambioOperativo = 'CREADO' | 'ESTADO' | 'PRIORIDAD' | 'BASES' | 'RESPONSABLES' | 'CERRADO';
+export type CambioOperativo =
+  'CREADO' | 'ESTADO' | 'PRIORIDAD' | 'BASES' | 'RESPONSABLES' | 'CERRADO';
 
 export interface OperativoActualizadoEvent {
   readonly operativoId: string;

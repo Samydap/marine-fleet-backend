@@ -5,11 +5,26 @@ export enum EstadoOperativo {
   ABORTADO = 'ABORTADO',
 }
 
+/**
+ * Mapeo con el documento de requerimientos (que habla de planeado, en curso,
+ * completado y abortado):
+ *   planeado   -> PLANIFICADO
+ *   en curso   -> EN_CURSO
+ *   completado -> CERRADO (con un ResultadoOperativo)
+ *   abortado   -> ABORTADO
+ */
 export enum PrioridadOperativo {
   BAJA = 'BAJA',
   MEDIA = 'MEDIA',
   ALTA = 'ALTA',
   CRITICA = 'CRITICA',
+}
+
+/** Columna `operativos.resultado_final`: se fija al cerrar el operativo. */
+export enum ResultadoOperativo {
+  EXITOSO = 'EXITOSO',
+  PARCIAL = 'PARCIAL',
+  FALLIDO = 'FALLIDO',
 }
 
 export enum RolParticipacion {
@@ -31,4 +46,8 @@ export function puedeTransicionarOperativo(
   hacia: EstadoOperativo,
 ): boolean {
   return TRANSICIONES[desde].includes(hacia);
+}
+
+export function esEstadoFinal(estado: EstadoOperativo): boolean {
+  return estado === EstadoOperativo.CERRADO || estado === EstadoOperativo.ABORTADO;
 }

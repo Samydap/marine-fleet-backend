@@ -42,12 +42,19 @@ git clone https://github.com/Samydap/marine-fleet-frontend.git
 **3.1. Inicia MySQL.** Abre el _XAMPP Control Panel_ y pulsa **Start** en la fila de MySQL.
 Debe quedar en verde. Si no arranca, revisa el apartado de problemas al final.
 
-**3.2. Crea la base de datos.** Abre `http://localhost/phpmyadmin`, entra a la pestaña **SQL** y
-ejecuta el script `database/schema.sql` del repositorio `Caso_13_IngSoft`. Ese script crea la
-base `marina_inteligencia` con sus tablas y los datos de prueba.
+**3.2. Crea la base de datos VACÍA.** Abre `http://localhost/phpmyadmin`, entra a la pestaña
+**SQL** y ejecuta:
 
-> **Cuidado:** ese script borra y vuelve a crear las tablas antes de insertar los datos. Úsalo
-> en una instalación nueva. Si ya tienes datos que quieras conservar, haz un respaldo primero.
+```sql
+CREATE DATABASE marina_inteligencia CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Nada más. Las tablas, los triggers de auditoría y los datos de prueba los crean los pasos 4.3 y
+4.4 (`migration:run` y `seed`). **Ya no hace falta** el `database/schema.sql` del repositorio
+viejo: la migración `1731200000000-InitSchema` lo reemplaza.
+
+> Si ya tenías la base creada con el `schema.sql` viejo, también funciona: las migraciones usan
+> `CREATE TABLE IF NOT EXISTS` y solo agregan las columnas que falten.
 
 ---
 
@@ -80,13 +87,14 @@ Abre el archivo `.env` y ajusta dos cosas:
 - **`JWT_SECRET` y `JWT_REFRESH_SECRET`**: cambia el texto de ejemplo por cualquier cadena de
   **mínimo 32 caracteres**. Si son más cortas, la aplicación no arranca.
 
-**4.3. Crea las tablas adicionales:**
+**4.3. Crea todas las tablas** (esquema base, operativos, incidentes, auditoría, etc.):
 
 ```bash
 npm run migration:run
 ```
 
-**4.4. Carga los usuarios y roles de prueba:**
+**4.4. Carga los datos de prueba** (roles, un usuario por rol, mares, bases navales,
+organizaciones, criminales con recompensa, avistamientos y criterios de amenaza):
 
 ```bash
 npm run seed
@@ -192,7 +200,7 @@ El usuario o la contraseña de `.env` no coinciden con los de tu MySQL. Revisa `
 `DB_PASSWORD`.
 
 **`Unknown database 'marina_inteligencia'`**
-Falta el paso 3.2: ejecuta `database/schema.sql` en phpMyAdmin.
+Falta el paso 3.2: crea la base vacía en phpMyAdmin.
 
 **El backend se cierra nada más arrancar mencionando `JWT_SECRET`**
 Las claves de `.env` son demasiado cortas. Deben tener mínimo 32 caracteres.

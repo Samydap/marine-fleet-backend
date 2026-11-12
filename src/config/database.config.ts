@@ -1,5 +1,6 @@
 import { registerAs } from '@nestjs/config';
 import type { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { ConcurrenciaOptimistaSubscriber } from '../shared/infrastructure/database/subscribers/concurrencia-optimista.subscriber';
 
 export default registerAs('database', (): TypeOrmModuleOptions => ({
   type: 'mysql',
@@ -9,13 +10,17 @@ export default registerAs('database', (): TypeOrmModuleOptions => ({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   charset: 'utf8mb4',
-  timezone: 'Z',
+  // 'local': Node y MySQL interpretan las fechas en la misma zona (la del
+  // equipo). Con 'Z' las columnas DEFAULT CURRENT_TIMESTAMP quedaban corridas
+  // 5 horas frente a las fechas que escribe la aplicacion.
+  timezone: 'local',
 
   // El esquema vive en migraciones versionadas. NUNCA poner esto en true:
   // TypeORM alteraria el esquema real y destruiria el trigger de historial.
   synchronize: false,
 
   autoLoadEntities: true,
+  subscribers: [ConcurrenciaOptimistaSubscriber],
   migrationsRun: false,
   logging: process.env.NODE_ENV === 'development' ? ['error', 'warn', 'migration'] : ['error'],
   extra: {

@@ -10,6 +10,7 @@ import { AllExceptionsFilter } from '../../common/filters/all-exceptions.filter'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { TransformResponseInterceptor } from '../../common/interceptors/transform-response.interceptor';
+import { PageResult } from '../../shared/application/pagination/page-result';
 import { Permiso } from '../../shared/domain/rbac/permiso.enum';
 import { RolCodigo } from '../../shared/domain/rbac/rol.enum';
 import { Rol } from '../usuarios/domain/rol.entity';
@@ -20,6 +21,7 @@ import {
 } from '../usuarios/domain/usuario.repository.port';
 import { LoginUseCase } from './application/login.use-case';
 import { ObtenerSesionUseCase } from './application/obtener-sesion.use-case';
+import { RefreshTokenUseCase } from './application/refresh-token.use-case';
 import { PASSWORD_HASHER } from './domain/password-hasher.port';
 import { TOKEN_ISSUER } from './domain/token-issuer.port';
 import { BcryptHasherAdapter } from './infrastructure/bcrypt-hasher.adapter';
@@ -73,7 +75,10 @@ describe('Auth (integracion del modulo)', () => {
       buscarPorId: (id) => Promise.resolve(id === usuario.id ? usuario : null),
       buscarPorEmailConCredenciales: (email) =>
         Promise.resolve(email === usuario.email ? usuario : null),
+      buscarPorIdConCredenciales: (id) => Promise.resolve(id === usuario.id ? usuario : null),
       listar: () => Promise.resolve([usuario]),
+      buscar: () => Promise.resolve(new PageResult([usuario], 1, 1, 20)),
+      existeEmail: (email) => Promise.resolve(email === usuario.email),
       guardar: (u) => Promise.resolve(u),
     };
 
@@ -86,6 +91,7 @@ describe('Auth (integracion del modulo)', () => {
       providers: [
         LoginUseCase,
         ObtenerSesionUseCase,
+        RefreshTokenUseCase,
         JwtStrategy,
         { provide: USUARIO_REPOSITORY, useValue: repositorio },
         { provide: PASSWORD_HASHER, useClass: BcryptHasherAdapter },
@@ -180,6 +186,41 @@ describe('Auth (integracion del modulo)', () => {
 
     it('responde 400 ante propiedades no declaradas en el DTO', async () => {
       await login({ email: usuario.email, password: PASSWORD, rol: 'ALMIRANTE' }).expect(400);
+    });
+  });
+
+  describe('POST /api/v1/auth/refresh', () => {
+    it('entrega un par nuevo de tokens con un refresh token valido', async () => {
+      const { body } = await login({ email: usuario.email, password: PASSWORD }).expect(200);
+
+      const respuesta = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: body.data.refreshToken })
+        .expect(200);
+
+      expect(respuesta.body.data.accessToken.split('.')).toHaveLength(3);
+      expect(respuesta.body.data.usuario.id).toBe('u-analista');
+    });
+
+    it('rechaza usar el access token como refresh token', async () => {
+      const { body } = await login({ email: usuario.email, password: PASSWORD }).expect(200);
+
+      const respuesta = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: body.data.accessToken })
+        .expect(401);
+
+      expect(respuesta.body.error.codigo).toBe('REFRESH_INVALIDO');
+    });
+
+    it('rechaza renovar si la cuenta fue bloqueada despues del login', async () => {
+      const { body } = await login({ email: usuario.email, password: PASSWORD }).expect(200);
+      usuario.estado = EstadoUsuario.BLOQUEADO;
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: body.data.refreshToken })
+        .expect(401);
     });
   });
 

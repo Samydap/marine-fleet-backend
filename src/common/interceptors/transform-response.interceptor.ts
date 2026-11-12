@@ -1,4 +1,5 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { SSE_METADATA } from '@nestjs/common/constants';
 import { map, type Observable } from 'rxjs';
 import { PageResult } from '../../shared/application/pagination/page-result';
 
@@ -15,7 +16,13 @@ export interface RespuestaApi<T> {
  */
 @Injectable()
 export class TransformResponseInterceptor<T> implements NestInterceptor<T, RespuestaApi<unknown>> {
-  intercept(_context: ExecutionContext, next: CallHandler<T>): Observable<RespuestaApi<unknown>> {
+  intercept(context: ExecutionContext, next: CallHandler<T>): Observable<RespuestaApi<unknown>> {
+    // Los streams SSE (@Sse) no se envuelven: cada MessageEvent debe salir tal
+    // cual para que el navegador respete `event:` e `id:`.
+    if (Reflect.getMetadata(SSE_METADATA, context.getHandler()) === true) {
+      return next.handle() as unknown as Observable<RespuestaApi<unknown>>;
+    }
+
     return next.handle().pipe(
       map((payload) => {
         if (payload instanceof PageResult) {

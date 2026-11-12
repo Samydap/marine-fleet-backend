@@ -53,7 +53,12 @@ export class AmpliarModelo1731200300000 implements MigrationInterface {
       'created_at',
       'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP',
     );
-    await this.indice(qr, 'avistamientos', 'ix_avistamientos_criminal_fecha', 'criminal_id, fecha_hora');
+    await this.indice(
+      qr,
+      'avistamientos',
+      'ix_avistamientos_criminal_fecha',
+      'criminal_id, fecha_hora',
+    );
     await this.indice(qr, 'avistamientos', 'ix_avistamientos_zona', 'zona_influencia_id');
 
     await this.columna(qr, 'reportes_ciudadanos', 'zona_influencia_id', 'VARCHAR(36) NULL');
@@ -198,7 +203,12 @@ export class AmpliarModelo1731200300000 implements MigrationInterface {
       END`);
   }
 
-  private async columna(qr: QueryRunner, tabla: string, nombre: string, definicion: string): Promise<void> {
+  private async columna(
+    qr: QueryRunner,
+    tabla: string,
+    nombre: string,
+    definicion: string,
+  ): Promise<void> {
     const filas = (await qr.query(
       `SELECT COUNT(*) AS n FROM information_schema.columns
         WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?`,
@@ -209,7 +219,12 @@ export class AmpliarModelo1731200300000 implements MigrationInterface {
     }
   }
 
-  private async indice(qr: QueryRunner, tabla: string, nombre: string, columnas: string): Promise<void> {
+  private async indice(
+    qr: QueryRunner,
+    tabla: string,
+    nombre: string,
+    columnas: string,
+  ): Promise<void> {
     const filas = (await qr.query(
       `SELECT COUNT(*) AS n FROM information_schema.statistics
         WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?`,
