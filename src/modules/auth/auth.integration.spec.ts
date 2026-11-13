@@ -12,6 +12,16 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { TransformResponseInterceptor } from '../../common/interceptors/transform-response.interceptor';
 import { PageResult } from '../../shared/application/pagination/page-result';
 import { Permiso } from '../../shared/domain/rbac/permiso.enum';
+import { codigoHotp } from './infrastructure/totp-mfa.adapter';
+
+/** Decodifica base32 a texto binario (solo para calcular el codigo en la prueba). */
+function base32(texto: string): Uint8Array {
+  const alfabeto = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const bits = [...texto].map((c) => alfabeto.indexOf(c).toString(2).padStart(5, '0')).join('');
+  const bytes: number[] = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  return Uint8Array.from(bytes);
+}
 import { RolCodigo } from '../../shared/domain/rbac/rol.enum';
 import { Rol } from '../usuarios/domain/rol.entity';
 import { EstadoUsuario, Usuario } from '../usuarios/domain/usuario.entity';
@@ -21,7 +31,11 @@ import {
 } from '../usuarios/domain/usuario.repository.port';
 import { LoginUseCase } from './application/login.use-case';
 import { ObtenerSesionUseCase } from './application/obtener-sesion.use-case';
+import { GestionarMfaUseCase } from './application/gestionar-mfa.use-case';
 import { RefreshTokenUseCase } from './application/refresh-token.use-case';
+import { VerifyMfaUseCase } from './application/verify-mfa.use-case';
+import { MFA_PROVIDER } from './domain/mfa-provider.port';
+import { TotpMfaAdapter } from './infrastructure/totp-mfa.adapter';
 import { PASSWORD_HASHER } from './domain/password-hasher.port';
 import { TOKEN_ISSUER } from './domain/token-issuer.port';
 import { BcryptHasherAdapter } from './infrastructure/bcrypt-hasher.adapter';
@@ -92,6 +106,9 @@ describe('Auth (integracion del modulo)', () => {
         LoginUseCase,
         ObtenerSesionUseCase,
         RefreshTokenUseCase,
+        VerifyMfaUseCase,
+        GestionarMfaUseCase,
+        { provide: MFA_PROVIDER, useClass: TotpMfaAdapter },
         JwtStrategy,
         { provide: USUARIO_REPOSITORY, useValue: repositorio },
         { provide: PASSWORD_HASHER, useClass: BcryptHasherAdapter },
@@ -221,6 +238,57 @@ describe('Auth (integracion del modulo)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refreshToken: body.data.refreshToken })
         .expect(401);
+    });
+  });
+
+  describe('segundo factor (MFA)', () => {
+    it('enrola, activa y luego exige el codigo en el login', async () => {
+      const totp = app.get<TotpMfaAdapter>(MFA_PROVIDER);
+      const { body } = await login({ email: usuario.email, password: PASSWORD }).expect(200);
+      const bearer = `Bearer ${body.data.accessToken}`;
+
+      const enrolado = await request(app.getHttpServer())
+        .post('/api/v1/auth/mfa/enrolar')
+        .set('Authorization', bearer)
+        .expect(200);
+      const secreto: string = enrolado.body.data.secreto;
+      const codigo = (): string => {
+        const paso = Math.floor(Date.now() / 30_000);
+        return codigoHotp(Buffer.from(base32(secreto)), paso);
+      };
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/mfa/activar')
+        .set('Authorization', bearer)
+        .send({ codigo: codigo() })
+        .expect(204);
+      expect(totp.descifrar(usuario.mfaSecretoCifrado ?? '')).toBe(secreto);
+
+      const conReto = await login({ email: usuario.email, password: PASSWORD }).expect(200);
+      expect(conReto.body.data.mfaRequerido).toBe(true);
+      expect(conReto.body.data.accessToken).toBeUndefined();
+      const challengeToken: string = conReto.body.data.challengeToken;
+
+      // El reto NO sirve como access token.
+      await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${challengeToken}`)
+        .expect(401);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/mfa/verify')
+        .send({ challengeToken, codigo: '000000' === codigo() ? '111111' : '000000' })
+        .expect(401);
+
+      const sesion = await request(app.getHttpServer())
+        .post('/api/v1/auth/mfa/verify')
+        .send({ challengeToken, codigo: codigo() })
+        .expect(200);
+      expect(sesion.body.data.accessToken.split('.')).toHaveLength(3);
+
+      // El fixture se comparte entre pruebas: se deja como estaba.
+      usuario.mfaHabilitado = false;
+      usuario.mfaSecretoCifrado = null;
     });
   });
 

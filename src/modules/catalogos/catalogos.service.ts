@@ -20,22 +20,34 @@ export class CatalogosService {
     @InjectRepository(BaseNaval) private readonly bases: Repository<BaseNaval>,
   ) {}
 
-  listarMares(): Promise<Mar[]> {
-    return this.mares.find({ where: { activo: true }, order: { nombre: 'ASC' } });
-  }
-
-  listarZonas(marId?: string): Promise<ZonaInfluencia[]> {
-    return this.zonas.find({
-      where: marId ? { activo: true, marId } : { activo: true },
+  /**
+   * Por defecto solo lo activo (lo que se puede elegir en un formulario). Con
+   * `incluirInactivos` tambien lo dado de baja: lo necesita la pantalla de
+   * administracion para poder reactivarlo.
+   */
+  listarMares(incluirInactivos = false): Promise<Mar[]> {
+    return this.mares.find({
+      where: incluirInactivos ? {} : { activo: true },
       order: { nombre: 'ASC' },
     });
   }
 
-  listarBases(zonaInfluenciaId?: string): Promise<BaseNaval[]> {
+  listarZonas(marId?: string, incluirInactivos = false): Promise<ZonaInfluencia[]> {
+    return this.zonas.find({
+      where: {
+        ...(incluirInactivos ? {} : { activo: true }),
+        ...(marId ? { marId } : {}),
+      },
+      order: { nombre: 'ASC' },
+    });
+  }
+
+  listarBases(zonaInfluenciaId?: string, incluirInactivos = false): Promise<BaseNaval[]> {
     return this.bases.find({
-      where: zonaInfluenciaId
-        ? { estado: EstadoBase.ACTIVA, zonaInfluenciaId }
-        : { estado: EstadoBase.ACTIVA },
+      where: {
+        ...(incluirInactivos ? {} : { estado: EstadoBase.ACTIVA }),
+        ...(zonaInfluenciaId ? { zonaInfluenciaId } : {}),
+      },
       order: { nombre: 'ASC' },
     });
   }

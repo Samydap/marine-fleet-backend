@@ -43,4 +43,26 @@ export class JwtTokenIssuerAdapter implements TokenIssuerPort {
       throw new UnauthorizedError('El refresh token no es valido o expiro.', 'REFRESH_INVALIDO');
     }
   }
+
+  emitirRetoMfa(usuarioId: string): Promise<string> {
+    return this.jwt.signAsync(
+      { sub: usuarioId, tipo: 'mfa' },
+      { secret: this.config.getOrThrow<string>('jwt.secret'), expiresIn: '5m' },
+    );
+  }
+
+  async verificarRetoMfa(challengeToken: string): Promise<string> {
+    try {
+      const payload = await this.jwt.verifyAsync<{ sub?: string; tipo?: string }>(challengeToken, {
+        secret: this.config.getOrThrow<string>('jwt.secret'),
+      });
+      if (payload.tipo !== 'mfa' || !payload.sub) throw new Error('No es un reto MFA');
+      return payload.sub;
+    } catch {
+      throw new UnauthorizedError(
+        'El reto de verificacion expiro o no es valido. Inicia sesion de nuevo.',
+        'RETO_MFA_INVALIDO',
+      );
+    }
+  }
 }

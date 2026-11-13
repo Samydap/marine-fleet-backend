@@ -1,3 +1,4 @@
+import { ConNombres } from '../../../common/decorators/con-nombres.decorator';
 import {
   Body,
   Controller,
@@ -45,6 +46,11 @@ const pagina = (q: PageQueryDto): Pick<FiltroIncidentes, 'page' | 'limit' | 'ord
 /** RF-6 Historial de incidentes y enfrentamientos (clase Enfrentamiento). */
 @ApiTags('incidentes')
 @ApiBearerAuth()
+@ConNombres({
+  criminales: ['criminales[].criminalId'],
+  bases: ['baseNavalId'],
+  usuarios: ['registradoPor'],
+})
 @Controller({ path: 'incidentes', version: '1' })
 export class IncidentesController {
   constructor(

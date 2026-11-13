@@ -1,3 +1,4 @@
+import { BuscadosController } from './presentation/buscados.controller';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
@@ -55,7 +56,12 @@ import { OrganizacionesController } from './presentation/organizaciones.controll
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Criminal, Organizacion, Membresia, Antecedente])],
-  controllers: [CriminalesController, ExpedienteController, OrganizacionesController],
+  controllers: [
+    CriminalesController,
+    ExpedienteController,
+    OrganizacionesController,
+    BuscadosController,
+  ],
   providers: [
     TypeOrmCriminalRepository,
     { provide: CRIMINAL_REPOSITORY, useExisting: TypeOrmCriminalRepository },

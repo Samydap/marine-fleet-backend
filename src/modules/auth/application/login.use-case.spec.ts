@@ -9,7 +9,7 @@ import { EstadoUsuario, Usuario } from '../../usuarios/domain/usuario.entity';
 import type { UsuarioRepositoryPort } from '../../usuarios/domain/usuario.repository.port';
 import type { PasswordHasherPort } from '../domain/password-hasher.port';
 import type { DatosToken, TokenIssuerPort, TokensEmitidos } from '../domain/token-issuer.port';
-import { LoginUseCase } from './login.use-case';
+import { LoginUseCase, type SesionIniciada } from './login.use-case';
 
 const MAX_INTENTOS = 3;
 const PASSWORD = 'Marina.2026';
@@ -60,6 +60,14 @@ class EmisorFalso implements TokenIssuerPort {
   verificarRefresh(): Promise<string> {
     return Promise.resolve('u-analista');
   }
+
+  emitirRetoMfa(usuarioId: string): Promise<string> {
+    return Promise.resolve(`reto-${usuarioId}`);
+  }
+
+  verificarRetoMfa(token: string): Promise<string> {
+    return Promise.resolve(token.replace('reto-', ''));
+  }
 }
 
 function crearUsuario(cambios: Partial<Usuario> = {}, rolActivo = true): Usuario {
@@ -101,7 +109,10 @@ describe('LoginUseCase', () => {
   it('entrega tokens y el usuario con credenciales correctas', async () => {
     const { useCase } = crearCasoDeUso(crearUsuario());
 
-    const sesion = await useCase.execute({ email: 'analista@marina.gov', password: PASSWORD });
+    const sesion = (await useCase.execute({
+      email: 'analista@marina.gov',
+      password: PASSWORD,
+    })) as SesionIniciada;
 
     expect(sesion.accessToken).toBe('access-falso');
     expect(sesion.refreshToken).toBe('refresh-falso');
@@ -125,10 +136,10 @@ describe('LoginUseCase', () => {
   it('acepta el correo con mayusculas y espacios alrededor', async () => {
     const { useCase } = crearCasoDeUso(crearUsuario());
 
-    const sesion = await useCase.execute({
+    const sesion = (await useCase.execute({
       email: '  Analista@Marina.GOV ',
       password: PASSWORD,
-    });
+    })) as SesionIniciada;
 
     expect(sesion.usuario.id).toBe('u-analista');
   });
@@ -202,6 +213,20 @@ describe('LoginUseCase', () => {
       .catch((e: DomainError) => e);
 
     expect((error as DomainError).codigo).toBe('ROL_INACTIVO');
+    expect(emisor.ultimo).toBeNull();
+  });
+
+  it('con segundo factor activo devuelve un reto y NO entrega tokens', async () => {
+    const usuario = crearUsuario({ mfaHabilitado: true, mfaSecretoCifrado: 'cifrado' });
+    const { useCase, emisor } = crearCasoDeUso(usuario);
+
+    const resultado = await useCase.execute({ email: usuario.email, password: PASSWORD });
+
+    expect(resultado).toEqual({
+      mfaRequerido: true,
+      challengeToken: 'reto-u-analista',
+      email: 'analista@marina.gov',
+    });
     expect(emisor.ultimo).toBeNull();
   });
 });

@@ -1,3 +1,4 @@
+import { ConNombres } from '../../../common/decorators/con-nombres.decorator';
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequierePermisos } from '../../../common/decorators/roles.decorator';
@@ -43,6 +44,7 @@ const aRespuesta = (a: Auditoria): AuditoriaResponse => ({
 
 @ApiTags('auditoria')
 @ApiBearerAuth()
+@ConNombres({ usuarios: ['usuarioId'] })
 @Controller({ path: 'auditoria', version: '1' })
 export class AuditoriaController {
   constructor(private readonly consultar: ConsultarAuditoriaUseCase) {}

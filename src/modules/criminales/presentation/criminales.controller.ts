@@ -1,3 +1,4 @@
+import { ConNombres } from '../../../common/decorators/con-nombres.decorator';
 import {
   Body,
   Controller,
@@ -47,6 +48,7 @@ import {
  */
 @ApiTags('criminales')
 @ApiBearerAuth()
+@ConNombres({ usuarios: ['creadoPor', 'actualizadoPor'], bases: ['origenBaseId'] })
 @Controller({ path: 'criminales', version: '1' })
 export class CriminalesController {
   constructor(

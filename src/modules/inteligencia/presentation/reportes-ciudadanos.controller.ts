@@ -1,3 +1,4 @@
+import { ConNombres } from '../../../common/decorators/con-nombres.decorator';
 import {
   Body,
   Controller,
@@ -34,6 +35,7 @@ import { aReporteResponse, type ReporteCiudadanoResponse } from './mappers/intel
 
 /** RF-3 Centro de Inteligencia: reportes de la ciudadania y su revision. */
 @ApiTags('inteligencia')
+@ConNombres({ criminales: ['criminalId'], usuarios: ['revisadoPor'] })
 @Controller({ path: 'reportes-ciudadanos', version: '1' })
 export class ReportesCiudadanosController {
   constructor(

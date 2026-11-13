@@ -19,8 +19,9 @@ export class JwtVerificadorSesionAdapter implements VerificadorSesionPort {
     } catch {
       throw new UnauthorizedError('Token invalido o expirado.', 'TOKEN_INVALIDO');
     }
-    if (!payload?.sub) {
-      throw new UnauthorizedError('Token sin sujeto.', 'TOKEN_INVALIDO');
+    // Solo access tokens: un reto MFA (tipo 'mfa') no abre el canal.
+    if (!payload?.sub || (payload as { tipo?: unknown }).tipo !== undefined || !payload.rol) {
+      throw new UnauthorizedError('El token no es un access token.', 'TOKEN_INVALIDO');
     }
 
     return {
