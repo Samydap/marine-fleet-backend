@@ -1,13 +1,24 @@
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm';
+import { DomainError } from '../../../shared/domain/errors/domain.error';
 import { Criminal } from '../../criminales/domain/criminal.entity';
 
+export enum EstadoVerificacion {
+  PENDIENTE = 'PENDIENTE',
+  VERIFICADO = 'VERIFICADO',
+  DESCARTADO = 'DESCARTADO',
+}
+
+export enum OrigenAvistamiento {
+  OFICIAL = 'OFICIAL',
+  REPORTE_CIUDADANO = 'REPORTE_CIUDADANO',
+}
+
 /**
- * RF-3. Tabla `avistamientos`.
+ * RF-3. Tabla `avistamientos` (clase Avistamiento del diagrama).
  *
- * OJO: el esquema real solo tiene id, criminal_id, fecha_hora y ubicacion. No
- * tiene `testigo` ni `verificado`, aunque la version 1 del frontend los
- * insinuaba. Si el equipo los necesita, van por migracion, no agregando
- * columnas a esta entidad sin tocar la base.
+ * Las columnas testigo, zona, estado de verificacion y origen las agrego la
+ * migracion 1731200300000-AmpliarModelo: la v1 solo tenia id, criminal,
+ * fecha_hora y ubicacion.
  */
 @Entity('avistamientos')
 export class Avistamiento {
@@ -23,7 +34,62 @@ export class Avistamiento {
   @Column({ type: 'text' })
   ubicacion!: string;
 
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  testigo!: string | null;
+
+  @Column({ name: 'zona_influencia_id', type: 'varchar', length: 36, nullable: true })
+  zonaInfluenciaId!: string | null;
+
+  @Column({
+    name: 'estado_verificacion',
+    type: 'enum',
+    enum: EstadoVerificacion,
+    default: EstadoVerificacion.PENDIENTE,
+  })
+  estadoVerificacion!: EstadoVerificacion;
+
+  @Column({ type: 'enum', enum: OrigenAvistamiento, default: OrigenAvistamiento.OFICIAL })
+  origen!: OrigenAvistamiento;
+
+  @Column({ type: 'text', nullable: true })
+  observaciones!: string | null;
+
+  @Column({ name: 'registrado_por', type: 'varchar', length: 36, nullable: true })
+  registradoPor!: string | null;
+
+  @Column({ name: 'verificado_por', type: 'varchar', length: 36, nullable: true })
+  verificadoPor!: string | null;
+
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  createdAt!: Date;
+
   @ManyToOne(() => Criminal, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'criminal_id' })
   criminal?: Criminal;
+
+  // --- Reglas de dominio ---
+
+  /**
+   * Un avistamiento VERIFICADO es inteligencia oficial: no se edita ni se borra.
+   * Si resulto falso, se DESCARTA (queda el rastro de que existio).
+   */
+  asegurarModificable(): void {
+    if (this.estadoVerificacion === EstadoVerificacion.VERIFICADO) {
+      throw new DomainError(
+        'Un avistamiento verificado no se puede modificar ni eliminar: descartalo primero.',
+        'AVISTAMIENTO_VERIFICADO',
+      );
+    }
+  }
+
+  cambiarVerificacion(nuevo: EstadoVerificacion, usuarioId: string): void {
+    if (nuevo === EstadoVerificacion.PENDIENTE) {
+      throw new DomainError('Un avistamiento no vuelve a PENDIENTE.', 'TRANSICION_INVALIDA');
+    }
+    if (nuevo === this.estadoVerificacion) {
+      throw new DomainError(`El avistamiento ya esta ${nuevo}.`, 'TRANSICION_INVALIDA');
+    }
+    this.estadoVerificacion = nuevo;
+    this.verificadoPor = usuarioId;
+  }
 }

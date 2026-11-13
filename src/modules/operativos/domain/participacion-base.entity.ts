@@ -23,6 +23,10 @@ export class ParticipacionBase {
   @Column({ name: 'unidades_asignadas', type: 'int', default: 0 })
   unidadesAsignadas!: number;
 
+  /** Recursos navales asignados (buques, unidades especiales...). Texto libre. */
+  @Column({ type: 'text', nullable: true })
+  recursos!: string | null;
+
   @Column({ type: 'tinyint', width: 1, default: 0 })
   confirmada!: boolean;
 

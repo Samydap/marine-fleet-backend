@@ -41,7 +41,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json({
       success: false,
       error: { codigo, message, status },
-      path: request.originalUrl,
+      path: request.originalUrl.replace(/([?&]token=)[^&]*/i, '$1***'),
       timestamp: new Date().toISOString(),
     });
   }
@@ -86,10 +86,33 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
     }
 
+    const deExpress = this.errorDeExpress(exception);
+    if (deExpress) return deExpress;
+
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       message: 'Error interno del servidor.',
       codigo: 'INTERNO',
+    };
+  }
+
+  /**
+   * Errores de middlewares de Express (body-parser: 413 cuerpo muy grande, 400
+   * JSON mal formado) traen su propio status: se respetan en vez de un 500.
+   */
+  private errorDeExpress(
+    exception: unknown,
+  ): { status: number; message: string; codigo: string } | null {
+    const conStatus = exception as { status?: unknown; statusCode?: unknown } | null;
+    const status = Number(conStatus?.statusCode ?? conStatus?.status);
+    if (!(status >= 400 && status < 500)) return null;
+    const grande = status === HttpStatus.PAYLOAD_TOO_LARGE;
+    return {
+      status,
+      message: grande
+        ? 'El cuerpo de la peticion es demasiado grande.'
+        : 'La peticion no tiene un formato valido.',
+      codigo: grande ? 'CUERPO_DEMASIADO_GRANDE' : 'PETICION_INVALIDA',
     };
   }
 

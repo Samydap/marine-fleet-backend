@@ -11,6 +11,7 @@ const MOTIVOS_QUE_OBLIGAN_NUEVA_VERSION: readonly MotivoGeneracion[] = [
   MotivoGeneracion.CAMBIO_RECOMPENSA,
   MotivoGeneracion.CAMBIO_ESTADO,
   MotivoGeneracion.CAMBIO_AFILIACION,
+  MotivoGeneracion.CAMBIO_DATOS,
 ];
 
 export function requiereNuevaVersion(motivo: MotivoGeneracion): boolean {

@@ -4,12 +4,14 @@ import type { UseCase } from '../../../shared/application/use-case.interface';
 import { ConcurrencyError } from '../../../shared/domain/errors/concurrency.error';
 import { NotFoundError } from '../../../shared/domain/errors/not-found.error';
 import { EVENTOS } from '../../../shared/domain/events/domain-event';
+import type { CriminalEstadoCambiadoEvent } from '../../../shared/domain/events/eventos.contracts';
 import type { Criminal } from '../domain/criminal.entity';
 import {
   CRIMINAL_REPOSITORY,
   type CriminalRepositoryPort,
 } from '../domain/criminal.repository.port';
 import type { EstadoCriminal } from '../domain/estado-criminal.enum';
+import { publicarEvento } from './publicar-evento';
 
 export interface CambiarEstadoInput {
   readonly criminalId: string;
@@ -19,7 +21,7 @@ export interface CambiarEstadoInput {
 }
 
 /**
- * RF-1 + RF-6. Muestra el manejo de concurrencia optimista con la columna
+ * RF-1 "dar de baja (marcar como capturado/muerto)" + RF-6. Muestra el manejo de concurrencia optimista con la columna
  * `version` del esquema: dos marines que capturan al mismo criminal a la vez no
  * se pisan en silencio, el segundo recibe 409.
  */
@@ -42,14 +44,19 @@ export class CambiarEstadoCriminalUseCase implements UseCase<CambiarEstadoInput,
 
     const estadoAnterior = criminal.estado;
     criminal.cambiarEstado(input.nuevoEstado, input.usuarioId);
+    if (estadoAnterior === criminal.estado) {
+      return criminal;
+    }
     const guardado = await this.repositorio.guardar(criminal);
 
-    this.eventos.emit(EVENTOS.CRIMINAL_ESTADO_CAMBIADO, {
+    // Carteles escucha esto: un cartel de un criminal CAPTURADO cambia de texto.
+    const evento: CriminalEstadoCambiadoEvent = {
       criminalId: guardado.id,
       estadoAnterior,
       estadoNuevo: guardado.estado,
       usuarioId: input.usuarioId,
-    });
+    };
+    await publicarEvento(this.eventos, EVENTOS.CRIMINAL_ESTADO_CAMBIADO, evento);
 
     return guardado;
   }

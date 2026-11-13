@@ -6,6 +6,7 @@ import { PassportModule } from '@nestjs/passport';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { LoginUseCase } from './application/login.use-case';
 import { ObtenerSesionUseCase } from './application/obtener-sesion.use-case';
+import { RefreshTokenUseCase } from './application/refresh-token.use-case';
 import { PASSWORD_HASHER } from './domain/password-hasher.port';
 import { TOKEN_ISSUER } from './domain/token-issuer.port';
 import { BcryptHasherAdapter } from './infrastructure/bcrypt-hasher.adapter';
@@ -26,9 +27,11 @@ type Expiracion = NonNullable<JwtModuleOptions['signOptions']>['expiresIn'];
  *
  * Implementado: POST /auth/login y GET /auth/me.
  *
- * PENDIENTE Sprint 1:
- *  - application/refresh-token.use-case.ts  (el refresh token ya se emite)
+ * Implementado tambien: POST /auth/refresh (renovacion con permisos vigentes).
+ *
+ * PENDIENTE (opcional, no lo exige el documento de requerimientos):
  *  - application/verify-mfa.use-case.ts + infrastructure/totp-mfa.adapter.ts
+ *    El esquema y el puerto MFA_PROVIDER ya lo preven.
  */
 @Module({
   imports: [
@@ -49,6 +52,7 @@ type Expiracion = NonNullable<JwtModuleOptions['signOptions']>['expiresIn'];
     { provide: TOKEN_ISSUER, useClass: JwtTokenIssuerAdapter },
     LoginUseCase,
     ObtenerSesionUseCase,
+    RefreshTokenUseCase,
   ],
   exports: [PASSWORD_HASHER, JwtModule],
 })

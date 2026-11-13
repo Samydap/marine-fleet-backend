@@ -7,8 +7,8 @@ coverage/
 .env.local
 .env.*.local
 
-storage/
-!storage/.gitkeep
+/storage/*
+!/storage/.gitkeep
 
 logs/
 *.log

@@ -21,6 +21,7 @@ import { SharedModule } from './shared/shared.module';
 // que agregarlas despues: si hay conflicto aqui, se aceptan AMBOS lados.
 // ---------------------------------------------------------------------------
 import { AmenazaModule } from './modules/amenaza/amenaza.module';
+import { AuditoriaModule } from './modules/auditoria/auditoria.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CartelesModule } from './modules/carteles/carteles.module';
 import { CatalogosModule } from './modules/catalogos/catalogos.module';
@@ -29,6 +30,8 @@ import { IncidentesModule } from './modules/incidentes/incidentes.module';
 import { InteligenciaModule } from './modules/inteligencia/inteligencia.module';
 import { OperativosModule } from './modules/operativos/operativos.module';
 import { RecompensasModule } from './modules/recompensas/recompensas.module';
+import { ReportesModule } from './modules/reportes/reportes.module';
+import { SincronizacionModule } from './modules/sincronizacion/sincronizacion.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
 
 @Module({
@@ -52,6 +55,7 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     SharedModule,
 
     AmenazaModule,
+    AuditoriaModule,
     AuthModule,
     CartelesModule,
     CatalogosModule,
@@ -60,6 +64,8 @@ import { UsuariosModule } from './modules/usuarios/usuarios.module';
     InteligenciaModule,
     OperativosModule,
     RecompensasModule,
+    ReportesModule,
+    SincronizacionModule,
     UsuariosModule,
   ],
   providers: [

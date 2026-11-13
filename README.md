@@ -22,8 +22,8 @@ Edita `.env` con tus credenciales de MySQL. Si `JWT_SECRET` tiene menos de 32 ca
 app no arranca: la validación de entorno es intencionalmente estricta.
 
 ```bash
-npm run migration:run    # crea las tablas de RF-4 y RF-6 (no existen en schema.sql)
-npm run seed             # siembra los 7 roles con su matriz de permisos + 1 usuario por rol
+npm run migration:run    # crea TODAS las tablas y los triggers (ya no hace falta schema.sql)
+npm run seed             # roles, 1 usuario por rol, mares, bases, organizaciones, criminales...
 npm run start:dev
 ```
 
@@ -33,18 +33,32 @@ npm run start:dev
 Usuarios de prueba del seed: `<codigo_rol>@marina.gov` / `Marina.2026`
 (por ejemplo `almirante@marina.gov`, `director_inteligencia@marina.gov`).
 
-## Qué hay implementado y qué no
+## Qué hay implementado
 
-| Zona                            | Estado                                                                                                                    | Dueño                               |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `config/`, `common/`, `shared/` | **Completo**: guards RBAC, interceptores, filtro de excepciones, paginación, errores de dominio, storage                  | Dev 1                               |
-| `modules/criminales` (RF-1)     | **Slice vertical de referencia**: entidades, puerto, 4 casos de uso, adaptador TypeORM, controller, DTOs, mapper, pruebas | Dev 2                               |
-| `modules/amenaza` (RF-5)        | Motor de clasificación implementado y probado; falta la capa de aplicación                                                | Dev 3                               |
-| `modules/auth` (RF-7)           | Estrategia JWT y hasher listos; faltan los casos de uso y el controller                                                   | Dev 1                               |
-| Resto de módulos                | Entidades, enums y puertos definidos; capa de aplicación pendiente                                                        | ver tabla en `docs/ARQUITECTURA.md` |
+**Todos los módulos están completos** (RF-1 a RF-7 + RNF del documento IEEE): casos de uso,
+puertos, adaptadores TypeORM, controllers con RBAC, DTOs validados y pruebas unitarias.
 
-Cada `*.module.ts` lleva en su cabecera la lista de archivos pendientes de su sprint. Es el
-punto de partida de su dueño.
+> **¿Cómo funciona cada caso de uso?** Lee [`docs/CASOS-DE-USO.md`](docs/CASOS-DE-USO.md): el
+> recorrido de una petición, el mapa de eventos entre módulos, la trazabilidad
+> requerimiento → endpoint y el detalle por módulo en [`docs/casos/`](docs/casos).
+
+| Módulo                          | Qué cubre                                                                  |
+| ------------------------------- | -------------------------------------------------------------------------- |
+| `criminales`                    | Criminales, foto, afiliaciones, organizaciones, antecedentes, historial    |
+| `recompensas`                   | Solicitud, validación del Almirante, historial inmutable                   |
+| `amenaza`                       | Clasificación automática, criterios (solo Analista), análisis de riesgo    |
+| `carteles`                      | Wanted automático y versionado en PDF / SVG, descarga de archivos          |
+| `inteligencia`                  | Avistamientos, reportes ciudadanos públicos con revisión                   |
+| `operativos`                    | Operativos, bases, recursos, responsables, estados, cierre                 |
+| `incidentes`                    | Enfrentamientos, vínculo a operativo, cierre con desenlaces, historiales   |
+| `reportes`                      | Reporte mensual por mar, tendencias, estadísticas, exportación PDF / CSV   |
+| `sincronizacion`                | Tiempo real por SSE, polling de respaldo, notificaciones a bases, `/salud` |
+| `catalogos`                     | Mares, zonas y bases navales (lectura y administración)                    |
+| `auth`, `usuarios`, `auditoria` | Login, refresh, cuentas con rol y base, bitácora consultable               |
+
+Pendiente opcional (no lo exige el documento): segundo factor TOTP (`auth/domain/mfa-provider.port.ts`).
+
+Prueba de punta a punta contra la API real: `bash scripts/flujo-demo.sh`.
 
 ## Cómo agregar un caso de uso (copia el slice de referencia)
 

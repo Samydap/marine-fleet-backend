@@ -1,4 +1,5 @@
 import type { ConfigService } from '@nestjs/config';
+import { PageResult } from '../../../shared/application/pagination/page-result';
 import { DomainError } from '../../../shared/domain/errors/domain.error';
 import { UnauthorizedError } from '../../../shared/domain/errors/unauthorized.error';
 import { Permiso } from '../../../shared/domain/rbac/permiso.enum';
@@ -25,8 +26,17 @@ class UsuariosEnMemoria implements UsuarioRepositoryPort {
   buscarPorEmailConCredenciales(email: string): Promise<Usuario | null> {
     return Promise.resolve(this.usuario && this.usuario.email === email ? this.usuario : null);
   }
+  buscarPorIdConCredenciales(): Promise<Usuario | null> {
+    return Promise.resolve(this.usuario);
+  }
   listar(): Promise<Usuario[]> {
     return Promise.resolve(this.usuario ? [this.usuario] : []);
+  }
+  buscar(): Promise<PageResult<Usuario>> {
+    return Promise.resolve(new PageResult(this.usuario ? [this.usuario] : [], 1, 1, 20));
+  }
+  existeEmail(): Promise<boolean> {
+    return Promise.resolve(false);
   }
   guardar(usuario: Usuario): Promise<Usuario> {
     this.guardados += 1;
@@ -45,6 +55,10 @@ class EmisorFalso implements TokenIssuerPort {
   emitir(datos: DatosToken): Promise<TokensEmitidos> {
     this.ultimo = datos;
     return Promise.resolve({ accessToken: 'access-falso', refreshToken: 'refresh-falso' });
+  }
+
+  verificarRefresh(): Promise<string> {
+    return Promise.resolve('u-analista');
   }
 }
 

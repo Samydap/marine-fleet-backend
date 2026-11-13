@@ -1,6 +1,7 @@
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import helmet from 'helmet';
@@ -9,11 +10,19 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
+import {
+  AUDITORIA_WRITER,
+  type AuditoriaWriterPort,
+} from './shared/domain/auditoria/auditoria.port';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   const config = app.get(ConfigService);
   const reflector = app.get(Reflector);
+
+  // La foto del criminal viaja en base64 (hasta 2 MB de imagen = ~2.8 MB de texto).
+  // El limite por defecto de Express (100 KB) la rechazaba con un 413.
+  app.useBodyParser('json', { limit: '4mb' });
 
   app.use(helmet());
   app.use(compression());
@@ -40,7 +49,7 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
-    new AuditInterceptor(reflector),
+    new AuditInterceptor(reflector, app.get<AuditoriaWriterPort>(AUDITORIA_WRITER)),
     new TransformResponseInterceptor(),
   );
 
