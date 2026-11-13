@@ -93,7 +93,7 @@ export const BASES = [
   },
   {
     id: 'b-marineford',
-    nombre: 'Cuartel General',
+    nombre: 'Base de Marineford',
     zonaId: 'z-marineford',
     ubicacion: 'Marineford',
     comandante: 'Almirante de Flota Sengoku',

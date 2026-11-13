@@ -39,8 +39,19 @@ const NOMBRES_ROL: Record<RolCodigo, string> = {
   [RolCodigo.ANALISTA_DATOS_CRIMINALES]: 'Analista de Datos Criminales',
   [RolCodigo.COORDINADOR_OPERACIONES]: 'Coordinador de Operaciones',
   [RolCodigo.DESARROLLADOR_BACKEND]: 'Desarrollador Backend',
-  [RolCodigo.ESPECIALISTA_SEGURIDAD]: 'Especialista en Seguridad Informatica',
-  [RolCodigo.CAPITAN]: 'Capitan de Base',
+  [RolCodigo.ESPECIALISTA_SEGURIDAD]: 'Especialista en Seguridad Informática',
+  [RolCodigo.CAPITAN]: 'Capitán de Base',
+};
+
+/** Nombre de la persona de cada usuario de prueba (distinto del nombre del cargo). */
+const NOMBRES_USUARIO: Record<RolCodigo, string> = {
+  [RolCodigo.ALMIRANTE]: 'Sakazuki',
+  [RolCodigo.DIRECTOR_INTELIGENCIA]: 'Tsuru',
+  [RolCodigo.ANALISTA_DATOS_CRIMINALES]: 'Tashigi',
+  [RolCodigo.COORDINADOR_OPERACIONES]: 'Brannew',
+  [RolCodigo.DESARROLLADOR_BACKEND]: 'Vegapunk',
+  [RolCodigo.ESPECIALISTA_SEGURIDAD]: 'Doberman',
+  [RolCodigo.CAPITAN]: 'Smoker',
 };
 
 /** Base asignada a cada usuario de prueba. Null = rol global (ve todas las bases). */
@@ -109,11 +120,12 @@ async function sembrarRolesYUsuarios(): Promise<void> {
       `INSERT INTO usuarios (id, nombre_completo, email, password_hash, rol_id, base_naval_id,
          estado, mfa_habilitado, intentos_fallidos, version)
        VALUES (?, ?, ?, ?, ?, ?, 'ACTIVO', 0, 0, 1)
-       ON DUPLICATE KEY UPDATE rol_id = VALUES(rol_id), password_hash = VALUES(password_hash),
-         base_naval_id = VALUES(base_naval_id), estado = 'ACTIVO', intentos_fallidos = 0`,
+       ON DUPLICATE KEY UPDATE nombre_completo = VALUES(nombre_completo), rol_id = VALUES(rol_id),
+         password_hash = VALUES(password_hash), base_naval_id = VALUES(base_naval_id),
+         estado = 'ACTIVO', intentos_fallidos = 0`,
       [
         `u-${codigo.toLowerCase()}`,
-        NOMBRES_ROL[codigo],
+        NOMBRES_USUARIO[codigo],
         email,
         passwordHash,
         rolId,
