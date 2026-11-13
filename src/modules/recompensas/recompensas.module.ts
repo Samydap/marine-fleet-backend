@@ -1,30 +1,32 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CriminalesModule } from '../criminales/criminales.module';
+import { ActivarRecompensaService } from './application/activar-recompensa.service';
+import { ConsultarRecompensasUseCase } from './application/consultar-recompensas.use-case';
+import { SolicitarRecompensaUseCase } from './application/solicitar-recompensa.use-case';
+import { ValidarRecompensaUseCase } from './application/validar-recompensa.use-case';
 import { Recompensa } from './domain/recompensa.entity';
+import { RECOMPENSA_REPOSITORY } from './domain/recompensa.repository.port';
+import { TypeOrmRecompensaRepository } from './infrastructure/typeorm-recompensa.repository';
+import { RecompensasController } from './presentation/recompensas.controller';
 
 /**
  * RF-1/RF-5 Recompensas. Dueño: Dev 3.
  *
- * Importa CriminalesModule para usar CRIMINAL_READER (solo lectura): asi valida
- * que el criminal exista sin poder modificarlo.
- *
- * PENDIENTE Sprint 1:
- *  - domain/recompensa.repository.port.ts
- *  - application/solicitar-recompensa.use-case.ts
- *      usa requiereValidacionDeAlmirante(monto) de politica-validacion.ts
- *  - application/validar-recompensa.use-case.ts
- *      al pasar a VIGENTE: marcar la anterior HISTORICA, actualizar
- *      criminales.recompensa_vigente_monto y emitir EVENTOS.RECOMPENSA_VIGENTE
- *      (lo escuchan Amenaza para reclasificar y Carteles para regenerar)
- *  - application/historial-recompensas.use-case.ts
- *  - infrastructure/typeorm-recompensa.repository.ts
- *  - presentation/recompensas.controller.ts
+ * Importa CriminalesModule solo por CRIMINAL_READER: valida que el criminal
+ * exista y este ACTIVO sin poder modificarlo. El monto vigente del criminal lo
+ * actualiza Criminales al escuchar RECOMPENSA_VIGENTE.
  */
 @Module({
   imports: [TypeOrmModule.forFeature([Recompensa]), CriminalesModule],
-  controllers: [],
-  providers: [],
+  controllers: [RecompensasController],
+  providers: [
+    { provide: RECOMPENSA_REPOSITORY, useClass: TypeOrmRecompensaRepository },
+    ActivarRecompensaService,
+    SolicitarRecompensaUseCase,
+    ValidarRecompensaUseCase,
+    ConsultarRecompensasUseCase,
+  ],
   exports: [],
 })
 export class RecompensasModule {}

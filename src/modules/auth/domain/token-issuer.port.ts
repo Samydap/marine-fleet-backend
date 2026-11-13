@@ -16,4 +16,9 @@ export type DatosToken = Omit<JwtPayload, 'iat' | 'exp'>;
  */
 export interface TokenIssuerPort {
   emitir(datos: DatosToken): Promise<TokensEmitidos>;
+  /**
+   * Verifica un refresh token (firma, expiracion y tipo) y devuelve el id del
+   * usuario. Lanza UnauthorizedError si no es valido.
+   */
+  verificarRefresh(refreshToken: string): Promise<string>;
 }

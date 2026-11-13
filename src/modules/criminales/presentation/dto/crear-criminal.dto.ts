@@ -33,11 +33,11 @@ export class CrearCriminalDto {
   @MaxLength(100, { each: true })
   alias?: string[];
 
-  @ApiPropertyOptional({ example: 19, minimum: 0, maximum: 1000 })
+  @ApiPropertyOptional({ example: 19, minimum: 0, maximum: 500 })
   @IsOptional()
   @IsInt()
   @Min(0)
-  @Max(1000)
+  @Max(500)
   edad?: number;
 
   @ApiPropertyOptional({ example: 'Complexion delgada, cicatriz en el pecho' })

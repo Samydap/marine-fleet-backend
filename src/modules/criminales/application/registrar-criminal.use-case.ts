@@ -3,14 +3,26 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 import type { UseCase } from '../../../shared/application/use-case.interface';
 import { DomainError } from '../../../shared/domain/errors/domain.error';
+import { NotFoundError } from '../../../shared/domain/errors/not-found.error';
 import { EVENTOS } from '../../../shared/domain/events/domain-event';
+import type { CriminalRegistradoEvent } from '../../../shared/domain/events/eventos.contracts';
 import { Criminal } from '../domain/criminal.entity';
 import {
   CRIMINAL_REPOSITORY,
   type CriminalRepositoryPort,
 } from '../domain/criminal.repository.port';
 import { EstadoCriminal, NivelAmenaza, RolMembresia } from '../domain/estado-criminal.enum';
+import { Membresia } from '../domain/membresia.entity';
+import {
+  MEMBRESIA_REPOSITORY,
+  type MembresiaRepositoryPort,
+} from '../domain/membresia.repository.port';
+import {
+  ORGANIZACION_REPOSITORY,
+  type OrganizacionRepositoryPort,
+} from '../domain/organizacion.repository.port';
 import { normalizarNombre } from '../domain/services/normalizador-nombre';
+import { publicarEvento } from './publicar-evento';
 
 export interface RegistrarCriminalInput {
   readonly nombre: string;
@@ -29,15 +41,18 @@ export interface RegistrarCriminalInput {
  * uso del proyecto. Un archivo, una clase, un metodo `execute`.
  *
  * Observa que:
- *  - Depende de un PUERTO (`CriminalRepositoryPort`), no de TypeORM.
+ *  - Depende de PUERTOS, no de TypeORM.
  *  - No conoce HTTP: no devuelve codigos de estado, lanza errores de dominio.
  *  - El nivel de amenaza queda PENDIENTE: lo calcula el modulo `amenaza` al
  *    escuchar el evento. Este modulo no sabe como se clasifica el riesgo.
+ *  - El cartel (RF-2) tampoco lo genera este modulo: Carteles escucha el evento.
  */
 @Injectable()
 export class RegistrarCriminalUseCase implements UseCase<RegistrarCriminalInput, Criminal> {
   constructor(
     @Inject(CRIMINAL_REPOSITORY) private readonly repositorio: CriminalRepositoryPort,
+    @Inject(ORGANIZACION_REPOSITORY) private readonly organizaciones: OrganizacionRepositoryPort,
+    @Inject(MEMBRESIA_REPOSITORY) private readonly membresias: MembresiaRepositoryPort,
     private readonly eventos: EventEmitter2,
   ) {}
 
@@ -51,6 +66,12 @@ export class RegistrarCriminalUseCase implements UseCase<RegistrarCriminalInput,
         'CRIMINAL_DUPLICADO',
         { idExistente: existente.id },
       );
+    }
+
+    // Se valida ANTES de guardar: si la organizacion no existe no debe quedar
+    // un criminal a medio registrar.
+    if (input.organizacionId && !(await this.organizaciones.buscarPorId(input.organizacionId))) {
+      throw new NotFoundError('organizacion', input.organizacionId);
     }
 
     const criminal = new Criminal();
@@ -72,14 +93,23 @@ export class RegistrarCriminalUseCase implements UseCase<RegistrarCriminalInput,
 
     const guardado = await this.repositorio.guardar(criminal);
 
-    // Carteles (RF-2) y Amenaza (RF-5) escuchan esto. Este modulo no los conoce.
-    this.eventos.emit(EVENTOS.CRIMINAL_REGISTRADO, {
-      criminalId: guardado.id,
-      usuarioId: input.usuarioId,
-      organizacionId: input.organizacionId ?? null,
-      rolEnOrganizacion: input.rolEnOrganizacion ?? null,
-    });
+    if (input.organizacionId) {
+      const membresia = new Membresia();
+      membresia.id = randomUUID();
+      membresia.criminalId = guardado.id;
+      membresia.organizacionId = input.organizacionId;
+      membresia.rol = input.rolEnOrganizacion ?? RolMembresia.MIEMBRO;
+      membresia.vigente = true;
+      membresia.fechaIngreso = new Date();
+      membresia.fechaSalida = null;
+      membresia.creadoPor = input.usuarioId;
+      await this.membresias.guardar(membresia);
+    }
 
-    return guardado;
+    const evento: CriminalRegistradoEvent = { criminalId: guardado.id, usuarioId: input.usuarioId };
+    await publicarEvento(this.eventos, EVENTOS.CRIMINAL_REGISTRADO, evento);
+
+    // Se relee para devolver membresias y el nivel que Amenaza pudo haber fijado.
+    return (await this.repositorio.buscarPorId(guardado.id)) ?? guardado;
   }
 }

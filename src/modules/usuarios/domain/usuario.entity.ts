@@ -67,4 +67,12 @@ export class Usuario extends BaseEntity {
     this.intentosFallidos = 0;
     this.ultimoAcceso = new Date();
   }
+
+  /** Activar una cuenta bloqueada tambien reinicia el contador de fallos. */
+  cambiarEstado(estado: EstadoUsuario): void {
+    if (estado === EstadoUsuario.ACTIVO) {
+      this.intentosFallidos = 0;
+    }
+    this.estado = estado;
+  }
 }

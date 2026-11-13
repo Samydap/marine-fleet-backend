@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import { DomainError } from '../../../shared/domain/errors/domain.error';
 import { EstadoRecompensa } from './estado-recompensa.enum';
 
 /**
@@ -57,4 +58,41 @@ export class Recompensa {
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt!: Date;
+
+  // --- Comportamiento de dominio ---
+
+  /** Pasa a VIGENTE. Si requeria validacion, deja la firma de quien la aprobo. */
+  activar(validadaPor: string | null, ahora: Date = new Date()): void {
+    if (this.estado !== EstadoRecompensa.PENDIENTE_VALIDACION) {
+      throw new DomainError(
+        `Solo una recompensa pendiente puede activarse (estado actual: ${this.estado}).`,
+        'RECOMPENSA_NO_PENDIENTE',
+      );
+    }
+    this.estado = EstadoRecompensa.VIGENTE;
+    this.vigenteDesde = ahora;
+    if (validadaPor) {
+      this.validadaPor = validadaPor;
+      this.fechaValidacion = ahora;
+    }
+  }
+
+  rechazar(validadaPor: string, motivo: string, ahora: Date = new Date()): void {
+    if (this.estado !== EstadoRecompensa.PENDIENTE_VALIDACION) {
+      throw new DomainError(
+        `Solo una recompensa pendiente puede rechazarse (estado actual: ${this.estado}).`,
+        'RECOMPENSA_NO_PENDIENTE',
+      );
+    }
+    this.estado = EstadoRecompensa.RECHAZADA;
+    this.validadaPor = validadaPor;
+    this.fechaValidacion = ahora;
+    this.motivo = this.motivo ? `${this.motivo} | Rechazo: ${motivo}` : `Rechazo: ${motivo}`;
+  }
+
+  /** La vigente anterior se conserva como HISTORICA: nunca se borra ni se edita el monto. */
+  pasarAHistorica(ahora: Date = new Date()): void {
+    this.estado = EstadoRecompensa.HISTORICA;
+    this.vigenteHasta = ahora;
+  }
 }

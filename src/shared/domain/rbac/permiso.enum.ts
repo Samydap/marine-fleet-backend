@@ -24,6 +24,9 @@ export enum Permiso {
 
   AMENAZA_CONFIGURAR_CRITERIOS = 'AMENAZA_CONFIGURAR_CRITERIOS',
 
+  REPORTES_LEER = 'REPORTES_LEER',
+  CATALOGOS_ADMINISTRAR = 'CATALOGOS_ADMINISTRAR',
+
   USUARIOS_ADMINISTRAR = 'USUARIOS_ADMINISTRAR',
   AUDITORIA_LEER = 'AUDITORIA_LEER',
   SISTEMA_CONFIGURAR = 'SISTEMA_CONFIGURAR',
@@ -45,6 +48,7 @@ export const PERMISOS_POR_ROL: Readonly<Record<RolCodigo, readonly Permiso[]>> =
     Permiso.OPERATIVOS_LEER,
     Permiso.INCIDENTES_LEER,
     Permiso.CARTELES_GENERAR,
+    Permiso.REPORTES_LEER,
   ],
 
   [RolCodigo.ANALISTA_DATOS_CRIMINALES]: [
@@ -54,6 +58,12 @@ export const PERMISOS_POR_ROL: Readonly<Record<RolCodigo, readonly Permiso[]>> =
     Permiso.CARTELES_GENERAR,
     Permiso.INTELIGENCIA_LEER,
     Permiso.INCIDENTES_LEER,
+    Permiso.OPERATIVOS_LEER,
+    // RNF: UNICAMENTE el Analista modifica los criterios de clasificacion.
+    // El endpoint ademas exige @Roles(ANALISTA_DATOS_CRIMINALES), asi que ni el
+    // permiso ALL del Almirante lo abre.
+    Permiso.AMENAZA_CONFIGURAR_CRITERIOS,
+    Permiso.REPORTES_LEER,
   ],
 
   [RolCodigo.COORDINADOR_OPERACIONES]: [
@@ -63,6 +73,8 @@ export const PERMISOS_POR_ROL: Readonly<Record<RolCodigo, readonly Permiso[]>> =
     Permiso.OPERATIVOS_COORDINAR,
     Permiso.INCIDENTES_LEER,
     Permiso.INCIDENTES_ESCRIBIR,
+    Permiso.CATALOGOS_ADMINISTRAR,
+    Permiso.REPORTES_LEER,
   ],
 
   [RolCodigo.DESARROLLADOR_BACKEND]: [
@@ -87,6 +99,7 @@ export const PERMISOS_POR_ROL: Readonly<Record<RolCodigo, readonly Permiso[]>> =
     Permiso.INTELIGENCIA_LEER,
     Permiso.INTELIGENCIA_ESCRIBIR,
     Permiso.OPERATIVOS_LEER,
+    Permiso.INCIDENTES_LEER,
     Permiso.INCIDENTES_ESCRIBIR,
   ],
 };
