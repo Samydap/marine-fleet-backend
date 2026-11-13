@@ -72,7 +72,7 @@ export class TypeOrmUsuarioRepository implements UsuarioRepositoryPort {
   private conCredenciales(): ReturnType<Repository<Usuario>['createQueryBuilder']> {
     return this.repo
       .createQueryBuilder('usuario')
-      .addSelect('usuario.passwordHash')
+      .addSelect(['usuario.passwordHash', 'usuario.mfaSecretoCifrado'])
       .leftJoinAndSelect('usuario.rol', 'rol');
   }
 }

@@ -81,16 +81,31 @@ export const SQL_TENDENCIA_NIVEL = `
    GROUP BY c.nivel_amenaza
    ORDER BY FIELD(c.nivel_amenaza, 'ALTO', 'MEDIO', 'BAJO', 'PENDIENTE')`;
 
+/**
+ * Una sola afiliacion por criminal: la de mayor rango (LIDER > OFICIAL >
+ * MIEMBRO) y, a igual rango, la mas antigua. Sin esto, un criminal con dos
+ * membresias vigentes se contaba (y su recompensa se sumaba) en las dos, y el
+ * total del reporte superaba al numero real de criminales.
+ */
+const MEMBRESIA_PRINCIPAL = `
+  (SELECT criminal_id, organizacion_id FROM (
+     SELECT mb.criminal_id, mb.organizacion_id,
+            ROW_NUMBER() OVER (PARTITION BY mb.criminal_id
+                               ORDER BY FIELD(mb.rol, 'LIDER', 'OFICIAL', 'MIEMBRO'),
+                                        mb.fecha_ingreso, mb.id) AS rn
+       FROM membresias mb WHERE mb.vigente = 1) ranqueadas
+    WHERE rn = 1)`;
+
 export const SQL_TENDENCIA_AFILIACION = `
   SELECT COALESCE(o.categoria, 'SIN_AFILIACION') AS grupo, COALESCE(o.nombre, 'Sin afiliacion') AS subgrupo,
          ${CONTEOS}, COALESCE(MAX(av.n), 0) AS avistamientosRecientes
     FROM criminales c
-    LEFT JOIN membresias mb ON mb.criminal_id = c.id AND mb.vigente = 1
+    LEFT JOIN ${MEMBRESIA_PRINCIPAL} mb ON mb.criminal_id = c.id
     LEFT JOIN organizaciones o ON o.id = mb.organizacion_id
     LEFT JOIN (SELECT mb2.organizacion_id, COUNT(*) AS n FROM avistamientos a
-                 JOIN membresias mb2 ON mb2.criminal_id = a.criminal_id AND mb2.vigente = 1
+                 JOIN ${MEMBRESIA_PRINCIPAL} mb2 ON mb2.criminal_id = a.criminal_id
                 WHERE a.fecha_hora >= ? GROUP BY mb2.organizacion_id) av
-           ON av.organizacion_id = o.id
+           ON av.organizacion_id <=> o.id
    GROUP BY o.id, o.categoria, o.nombre
    ORDER BY recompensaActiva DESC, totalCriminales DESC`;
 

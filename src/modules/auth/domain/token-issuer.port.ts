@@ -21,4 +21,8 @@ export interface TokenIssuerPort {
    * usuario. Lanza UnauthorizedError si no es valido.
    */
   verificarRefresh(refreshToken: string): Promise<string>;
+  /** Token corto (5 min) que prueba que la contraseña ya fue validada. */
+  emitirRetoMfa(usuarioId: string): Promise<string>;
+  /** Devuelve el id del usuario del reto, o lanza UnauthorizedError. */
+  verificarRetoMfa(challengeToken: string): Promise<string>;
 }

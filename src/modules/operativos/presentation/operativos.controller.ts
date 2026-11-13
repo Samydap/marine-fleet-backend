@@ -1,3 +1,4 @@
+import { ConNombres } from '../../../common/decorators/con-nombres.decorator';
 import {
   Body,
   Controller,
@@ -44,6 +45,11 @@ import {
 /** RF-4 Coordinacion de operativos entre bases navales. Controller delgado. */
 @ApiTags('operativos')
 @ApiBearerAuth()
+@ConNombres({
+  criminales: ['objetivoCriminalId'],
+  bases: ['baseLiderId', 'bases[].baseNavalId'],
+  usuarios: ['responsables[].usuarioId'],
+})
 @Controller({ path: 'operativos', version: '1' })
 export class OperativosController {
   constructor(

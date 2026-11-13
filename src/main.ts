@@ -9,7 +9,9 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { NombresInterceptor } from './common/interceptors/nombres.interceptor';
 import { TransformResponseInterceptor } from './common/interceptors/transform-response.interceptor';
+import { NOMBRES_LOOKUP, type NombresLookupPort } from './shared/domain/lookup/nombres.port';
 import {
   AUDITORIA_WRITER,
   type AuditoriaWriterPort,
@@ -51,6 +53,8 @@ async function bootstrap(): Promise<void> {
     new LoggingInterceptor(),
     new AuditInterceptor(reflector, app.get<AuditoriaWriterPort>(AUDITORIA_WRITER)),
     new TransformResponseInterceptor(),
+    // El mas interno: completa nombres antes de que la respuesta se envuelva.
+    new NombresInterceptor(reflector, app.get<NombresLookupPort>(NOMBRES_LOOKUP)),
   );
 
   if (!config.get<boolean>('app.isProduction')) {

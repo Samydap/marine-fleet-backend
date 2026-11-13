@@ -1,3 +1,4 @@
+import { ConNombres } from '../../../common/decorators/con-nombres.decorator';
 import {
   Body,
   Controller,
@@ -30,6 +31,7 @@ import { aRecompensaResponse, type RecompensaResponse } from './mappers/recompen
 /** RF-1 / RF-5. Recompensas (bounties): solicitud, validacion e historial. */
 @ApiTags('recompensas')
 @ApiBearerAuth()
+@ConNombres({ criminales: ['criminalId'], usuarios: ['solicitadaPor', 'validadaPor'] })
 @Controller({ path: 'recompensas', version: '1' })
 export class RecompensasController {
   constructor(

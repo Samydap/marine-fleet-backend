@@ -22,6 +22,17 @@ export interface SesionIniciada {
   readonly usuario: Usuario;
 }
 
+/** Contraseña correcta, pero la cuenta tiene segundo factor: falta el codigo. */
+export interface RetoMfaEmitido {
+  readonly mfaRequerido: true;
+  readonly challengeToken: string;
+  readonly email: string;
+}
+
+export type ResultadoLogin = SesionIniciada | RetoMfaEmitido;
+
+export const esRetoMfa = (r: ResultadoLogin): r is RetoMfaEmitido => 'mfaRequerido' in r;
+
 /**
  * El mismo mensaje para "el correo no existe" y "la contraseña es incorrecta":
  * distinguirlos le diria a un atacante que correos estan registrados.
@@ -37,11 +48,12 @@ const CREDENCIALES_INVALIDAS = 'Correo o contraseña incorrectos.';
  *    (MAX_INTENTOS_FALLIDOS) la cuenta queda BLOQUEADA.
  *  - Un acceso exitoso reinicia el contador y registra `ultimo_acceso`.
  *
- * PENDIENTE: el segundo factor. Los roles con `requiere_2fa` todavia entran
- * solo con contraseña; el reto TOTP llega con verify-mfa.use-case.ts.
+ *  - Si la cuenta tiene el segundo factor activo, NO entrega tokens: devuelve
+ *    un reto (`challengeToken`, 5 min) que se canjea en POST /auth/mfa/verify
+ *    junto con el codigo de 6 digitos de la app autenticadora.
  */
 @Injectable()
-export class LoginUseCase implements UseCase<LoginInput, SesionIniciada> {
+export class LoginUseCase implements UseCase<LoginInput, ResultadoLogin> {
   private readonly maxIntentos: number;
 
   constructor(
@@ -53,7 +65,7 @@ export class LoginUseCase implements UseCase<LoginInput, SesionIniciada> {
     this.maxIntentos = config.get<number>('jwt.maxIntentosFallidos') ?? 5;
   }
 
-  async execute(input: LoginInput): Promise<SesionIniciada> {
+  async execute(input: LoginInput): Promise<ResultadoLogin> {
     const email = input.email.trim().toLowerCase();
 
     const usuario = await this.usuarios.buscarPorEmailConCredenciales(email);
@@ -73,6 +85,15 @@ export class LoginUseCase implements UseCase<LoginInput, SesionIniciada> {
     const rol = usuario.rol;
     if (!rol || !rol.activo) {
       throw new DomainError('El rol asignado a esta cuenta no esta activo.', 'ROL_INACTIVO');
+    }
+
+    if (usuario.mfaHabilitado && usuario.mfaSecretoCifrado) {
+      // Los intentos fallidos se reinician recien cuando el codigo sea correcto.
+      return {
+        mfaRequerido: true,
+        challengeToken: await this.tokens.emitirRetoMfa(usuario.id),
+        email: usuario.email,
+      };
     }
 
     usuario.registrarAccesoExitoso();

@@ -56,7 +56,7 @@ puertos, adaptadores TypeORM, controllers con RBAC, DTOs validados y pruebas uni
 | `catalogos`                     | Mares, zonas y bases navales (lectura y administración)                    |
 | `auth`, `usuarios`, `auditoria` | Login, refresh, cuentas con rol y base, bitácora consultable               |
 
-Pendiente opcional (no lo exige el documento): segundo factor TOTP (`auth/domain/mfa-provider.port.ts`).
+Segundo factor TOTP incluido. Cambios de contrato para el frontend: [`docs/CAMBIOS-PARA-FRONTEND.md`](docs/CAMBIOS-PARA-FRONTEND.md).
 
 Prueba de punta a punta contra la API real: `bash scripts/flujo-demo.sh`.
 

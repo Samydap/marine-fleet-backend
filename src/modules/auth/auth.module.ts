@@ -6,7 +6,11 @@ import { PassportModule } from '@nestjs/passport';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { LoginUseCase } from './application/login.use-case';
 import { ObtenerSesionUseCase } from './application/obtener-sesion.use-case';
+import { GestionarMfaUseCase } from './application/gestionar-mfa.use-case';
 import { RefreshTokenUseCase } from './application/refresh-token.use-case';
+import { VerifyMfaUseCase } from './application/verify-mfa.use-case';
+import { MFA_PROVIDER } from './domain/mfa-provider.port';
+import { TotpMfaAdapter } from './infrastructure/totp-mfa.adapter';
 import { PASSWORD_HASHER } from './domain/password-hasher.port';
 import { TOKEN_ISSUER } from './domain/token-issuer.port';
 import { BcryptHasherAdapter } from './infrastructure/bcrypt-hasher.adapter';
@@ -29,9 +33,8 @@ type Expiracion = NonNullable<JwtModuleOptions['signOptions']>['expiresIn'];
  *
  * Implementado tambien: POST /auth/refresh (renovacion con permisos vigentes).
  *
- * PENDIENTE (opcional, no lo exige el documento de requerimientos):
- *  - application/verify-mfa.use-case.ts + infrastructure/totp-mfa.adapter.ts
- *    El esquema y el puerto MFA_PROVIDER ya lo preven.
+ * Segundo factor TOTP: login -> reto -> POST /auth/mfa/verify, y alta/baja
+ * por el propio usuario en /auth/mfa/enrolar | activar | desactivar.
  */
 @Module({
   imports: [
@@ -53,6 +56,9 @@ type Expiracion = NonNullable<JwtModuleOptions['signOptions']>['expiresIn'];
     LoginUseCase,
     ObtenerSesionUseCase,
     RefreshTokenUseCase,
+    VerifyMfaUseCase,
+    GestionarMfaUseCase,
+    { provide: MFA_PROVIDER, useClass: TotpMfaAdapter },
   ],
   exports: [PASSWORD_HASHER, JwtModule],
 })

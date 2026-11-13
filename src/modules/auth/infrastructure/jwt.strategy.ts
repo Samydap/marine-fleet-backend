@@ -23,6 +23,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!payload?.sub) {
       throw new UnauthorizedException('Token sin sujeto.');
     }
+    // El reto MFA se firma con el mismo secreto que el access token: sin esta
+    // regla, alguien que solo sabe la contraseña usaria el reto como sesion.
+    if ((payload as { tipo?: unknown }).tipo !== undefined || !payload.rol) {
+      throw new UnauthorizedException('El token no es un access token.');
+    }
 
     return {
       id: payload.sub,
